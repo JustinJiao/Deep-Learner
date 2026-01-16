@@ -1,7 +1,10 @@
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_ollama import ChatOllama,OllamaEmbeddings
-
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+load_dotenv()
+import os
 # 1. 填入你的 Windows IP
 WINDOWS_IP = "192.168.1.157"  # 请替换为你的 Windows 机器的实际 IP 地址
 llm = ChatOllama(
@@ -14,7 +17,11 @@ embedding_model = OllamaEmbeddings(
     model="nomic-embed-text:latest", # 确保 Windows 上有这个模型
     base_url=f"http://{WINDOWS_IP}:11434",
 )
-
+llm_openai = ChatOpenAI(
+    model="gpt-4o-mini", # 或者 "gpt-4o-mini"
+    temperature=0,
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 
 def chat_completion(prompt: str, system_prompt: str = "你是一个专业的人工智能助手"):
     """
@@ -26,7 +33,7 @@ def chat_completion(prompt: str, system_prompt: str = "你是一个专业的人�
     ]
     
     # 使用 LangChain 的 invoke 方法
-    response = llm.invoke(messages)
+    response = llm_openai.invoke(messages)
     
     # 返回字符串内容
     return response.content
