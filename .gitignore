@@ -16,3 +16,6 @@ venv/
 # 忽略 IDE 配置
 .vscode/
 .idea/
+
+# 忽略数据文件
+data/docs/

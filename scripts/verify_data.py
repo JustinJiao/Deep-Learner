@@ -8,13 +8,13 @@ load_dotenv()
 def verify_ingestion():
     # 1. 检查 Elasticsearch
     es = Elasticsearch([os.getenv("ES_URL", "http://localhost:9200")])
-    es_res = es.count(index="deep_learner_knowledge")
+    es_res = es.count(index="knowledge_base_index")
     print(f"--- [Elasticsearch 检查] ---")
     print(f"总记录数: {es_res['count']}")
 
     # 2. 检查 Milvus
     connections.connect("default", host="localhost", port="19530")
-    collection = Collection("deep_learner_vectors")
+    collection = Collection("knowledge_vector_collection")
     collection.load() # 必须先加载到内存
     print(f"\n--- [Milvus 检查] ---")
     print(f"当前 Collection 名称: {collection.name}")
@@ -22,7 +22,7 @@ def verify_ingestion():
     
     # 3. 随机抽样对比 ID 是否对齐
     # 在 ES 中找一条数据
-    sample = es.search(index="deep_learner_knowledge", size=1)
+    sample = es.search(index="knowledge_base_index", size=1)
     if sample['hits']['hits']:
         target_id = sample['hits']['hits'][0]['_id']
         print(f"\n--- [ID 对齐检查] ---")
