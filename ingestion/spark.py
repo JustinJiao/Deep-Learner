@@ -1,9 +1,8 @@
 from pyspark import SparkContext
-from .config import ResourceFactory
-from .parsers import UniversalParser
-from .chunkers import SemanticChunker
-from .dual_writer import DualWriter
-from .config import AppConfig
+from ingestion.config import ResourceFactory,AppConfig
+from ingestion.parsers import UniversalParser
+from ingestion.chunkers import SemanticChunker
+from ingestion.dual_writer import DualWriter
 import os
 # 获取当前脚本所在目录的父目录（即项目根目录）
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

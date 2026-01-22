@@ -1,6 +1,6 @@
 import os
 from openai import OpenAI
-from .config import AppConfig
+from ingestion.config import AppConfig
 
 class DualWriter:
     def __init__(self, milvus_col, es_client):

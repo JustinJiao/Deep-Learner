@@ -1,4 +1,3 @@
-import os
 from unstructured.partition.auto import partition
 from unstructured.cleaners.core import clean, group_broken_paragraphs
 
@@ -28,5 +27,6 @@ class UniversalParser:
                 md_lines.append(el.metadata.text_as_html)
             else:
                 md_lines.append(text)
-                
-        return "\n\n".join(md_lines)
+        result = "\n\n".join(md_lines)
+        print('result:' , result)
+        return result

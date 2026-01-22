@@ -1,6 +1,6 @@
 import hashlib
 import os
-from .config import AppConfig
+from ingestion.config import AppConfig
 class SemanticChunker:
     def __init__(self, chunk_size=None, overlap_lines=None):
         self.chunk_size = chunk_size or AppConfig.CHUNK_SIZE
