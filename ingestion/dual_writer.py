@@ -1,53 +1,49 @@
 import os
-from openai import OpenAI
-from ingestion.config import AppConfig
+from config.settings import AppConfig
+from services.embedding_service import EmbeddingService # 🌟 引用已解耦的服务
 
 class DualWriter:
     def __init__(self, milvus_col, es_client):
         self.collection = milvus_col
         self.es = es_client
         self.es_index = AppConfig.ES_INDEX
-        # 初始化 OpenAI 客户端
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # 🌟 不再在这里配置 OpenAI 详情，直接使用统一服务
+        self.emb_service = EmbeddingService()
 
     def write_all(self, data_list):
         if not data_list: return
 
-        # 1. 为每个分块生成向量并组装 Milvus 数据
+        # 1. 调用统一的 Embedding 服务（批量处理）
         contents = [d['content'] for d in data_list]
         try:
-            # 批量调用 Embedding 模型 (text-embedding-3-small)
-            response = self.client.embeddings.create(
-                input=contents,
-                model="text-embedding-3-small"
-            )
-            vectors = [item.embedding for item in response.data]
+            vectors = self.emb_service.get_batch_embeddings(contents)
             
-            # 组装符合 Milvus Schema 的列表数据
-            milvus_data = [
-                [d['doc_id'] for d in data_list],      # doc_id
-                vectors,                               # vector
-                [d['content'] for d in data_list],    # content
-                [d['h1'] for d in data_list],         # h1
-                [d['h2'] for d in data_list],         # h2
-                [d['source'] for d in data_list]      # source
-            ]
-            
-            # 正式写入 Milvus
-            self.collection.upsert(milvus_data)
-            # 强制刷新以使数据立即可见
-            self.collection.flush() 
-            print("✅ Milvus 向量写入并刷新成功")
+            if vectors:
+                # 🌟 关键修改：组装数据，确保 metadata 作为一个 JSON 列写入
+                milvus_data = [
+                    [d['doc_id'] for d in data_list],      # doc_id
+                    vectors,                               # vector
+                    [d['content'] for d in data_list],    # content
+                    [d['metadata'] for d in data_list]     # metadata (JSON 格式)
+                ]
+                
+                self.collection.upsert(milvus_data)
+                self.collection.flush() 
+                print(f"✅ Milvus 成功写入 {len(data_list)} 条向量数据")
             
         except Exception as e:
             print(f"❌ Milvus 写入失败: {e}")
 
-        # 2. ES Bulk 写入保持不变
+        # 2. ES Bulk 写入
         from elasticsearch import helpers
         actions = [{
             "_index": self.es_index,
             "_id": d["doc_id"],
-            "_source": d
+            "_source": {
+                "content": d["content"],
+                "metadata": d["metadata"] # ES 也保持相同的 metadata 结构
+            }
         } for d in data_list]
+        
         helpers.bulk(self.es, actions)
         print(f"✅ Elasticsearch 文本写入成功")

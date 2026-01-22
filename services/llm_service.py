@@ -1,44 +1,69 @@
-from langchain_ollama import ChatOllama, OllamaEmbeddings
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_ollama import ChatOllama,OllamaEmbeddings
+import os
+from typing import Optional, List
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
+from langchain_core.messages import SystemMessage, HumanMessage
+
 load_dotenv()
-import os
-# 1. 填入你的 Windows IP
-WINDOWS_IP = "192.168.1.157"  # 请替换为你的 Windows 机器的实际 IP 地址
-llm = ChatOllama(
-    model="qwen:7b", # 确保 Windows 上有这个模型
-    base_url=f"http://{WINDOWS_IP}:11434",
-    temperature=0,
-    timeout=10 # 10秒不回就报错
-)
-embedding_model = OllamaEmbeddings(
-    model="nomic-embed-text:latest", # 确保 Windows 上有这个模型
-    base_url=f"http://{WINDOWS_IP}:11434",
-)
-llm_openai = ChatOpenAI(
-    model="gpt-4o-mini", # 或者 "gpt-4o-mini"
-    temperature=0,
-    api_key=os.getenv("OPENAI_API_KEY")
-)
 
-def chat_completion(prompt: str, system_prompt: str = "你是一个专业的人工智能助手"):
-    """
-    适配 LangChain Ollama 的通用调用函数
-    """
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=prompt),
-    ]
-    
-    # 使用 LangChain 的 invoke 方法
-    response = llm_openai.invoke(messages)
-    
-    # 返回字符串内容
-    return response.content
+class LLMService:
+    def __init__(self, provider: Optional[str] = None):
+        """
+        初始化 LLM 服务。
+        provider: 'openai' 或 'ollama'。如果不传，默认读取 .env。
+        """
+        self.provider = provider or os.getenv("DEFAULT_LLM_PROVIDER", "openai")
+        
+        if self.provider == "openai":
+            self.llm = ChatOpenAI(
+                model=os.getenv("OPENAI_CHAT_MODEL"),
+                api_key=os.getenv("OPENAI_API_KEY"),
+                temperature=0  # RAG 场景建议设置为 0，保证输出稳定性
+            )
+        elif self.provider == "ollama":
+            self.llm = ChatOllama(
+                model=os.getenv("OLLAMA_CHAT_MODEL"),
+                base_url=os.getenv("OLLAMA_BASE_URL"),
+                temperature=0,
+                timeout=30 # 给远程调用留出足够的响应时间
+            )
+        else:
+            raise ValueError(f"不支持的 LLM 提供商: {self.provider}")
 
-def get_actual_dim():
-    # 动态测试一次，确保拿到真实维度
-    test_vec = embedding_model.embed_query("test")
-    return len(test_vec)
+    def chat_completion(self, prompt: str, system_prompt: str = "你是一个专业的人工智能助手") -> str:
+        """
+        通用的对话补全函数。
+        """
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=prompt),
+        ]
+        
+        try:
+            response = self.llm.invoke(messages)
+            return response.content
+        except Exception as e:
+            error_msg = f"❌ [{self.provider}] LLM 调用失败: {e}"
+            print(error_msg)
+            return error_msg
+
+    def stream_completion(self, prompt: str, system_prompt: str = "你是一个专业的人工智能助手"):
+        """
+        流式输出（适用于需要前端打字机效果的场景）。
+        """
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=prompt),
+        ]
+        return self.llm.stream(messages)
+
+# --- 简单测试脚本 ---
+if __name__ == "__main__":
+    # 默认加载测试
+    service = LLMService()
+    print(f"当前运行模式: {service.provider}")
+    
+    test_prompt = "简单介绍一下什么是 RAG 架构？"
+    result = service.chat_completion(test_prompt)
+    print(f"回答内容:\n{result}")
