@@ -4,7 +4,7 @@ from pymilvus import connections, Collection
 from elasticsearch import Elasticsearch
 
 # 按照你要求的绝对导入路径
-from services.embedding_service import EmbeddingService
+from llm.embedding_service import EmbeddingService
 from retrieval.vector_retriever import VectorRetriever
 from retrieval.keyword_retriever import KeywordRetriever
 from retrieval.reranker import Reranker

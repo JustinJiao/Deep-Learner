@@ -1,30 +1,31 @@
 import os
-from config.settings import AppConfig
-from services.embedding_service import EmbeddingService # 🌟 引用已解耦的服务
+from config.settings import AppConfig, ResourceFactory
+from elasticsearch import helpers
 
 class DualWriter:
-    def __init__(self, milvus_col, es_client):
-        self.collection = milvus_col
-        self.es = es_client
+    def __init__(self, milvus_col=None, es_client=None):
+        # 🌟 优化：如果初始化没传，直接去工厂拿单例
+        self.collection = milvus_col or ResourceFactory.get_milvus_collection()
+        self.es = es_client or ResourceFactory.get_es_client()
         self.es_index = AppConfig.ES_INDEX
-        # 🌟 不再在这里配置 OpenAI 详情，直接使用统一服务
-        self.emb_service = EmbeddingService()
+        
+        # 🌟 关键：从工厂获取解耦后的 Embedding 服务
+        self.emb_service = ResourceFactory.get_embedding_service()
 
     def write_all(self, data_list):
         if not data_list: return
 
-        # 1. 调用统一的 Embedding 服务（批量处理）
+        # 1. 批量向量化 (使用更新后的接口名 embed_documents)
         contents = [d['content'] for d in data_list]
         try:
-            vectors = self.emb_service.get_batch_embeddings(contents)
+            vectors = self.emb_service.embed_documents(contents)
             
             if vectors:
-                # 🌟 关键修改：组装数据，确保 metadata 作为一个 JSON 列写入
                 milvus_data = [
-                    [d['doc_id'] for d in data_list],      # doc_id
-                    vectors,                               # vector
-                    [d['content'] for d in data_list],    # content
-                    [d['metadata'] for d in data_list]     # metadata (JSON 格式)
+                    [d['doc_id'] for d in data_list],      
+                    vectors,                               
+                    [d['content'] for d in data_list],    
+                    [d['metadata'] for d in data_list]     
                 ]
                 
                 self.collection.upsert(milvus_data)
@@ -35,13 +36,12 @@ class DualWriter:
             print(f"❌ Milvus 写入失败: {e}")
 
         # 2. ES Bulk 写入
-        from elasticsearch import helpers
         actions = [{
             "_index": self.es_index,
             "_id": d["doc_id"],
             "_source": {
                 "content": d["content"],
-                "metadata": d["metadata"] # ES 也保持相同的 metadata 结构
+                "metadata": d["metadata"] 
             }
         } for d in data_list]
         

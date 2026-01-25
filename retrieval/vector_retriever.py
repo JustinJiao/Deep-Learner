@@ -1,18 +1,18 @@
 from typing import List
-from pymilvus import Collection
 from retrieval.base import BaseRetriever, SearchResult
-from services.embedding_service import EmbeddingService
+from config.settings import ResourceFactory
 
 class VectorRetriever(BaseRetriever):
-    def __init__(self, collection: Collection, embedding_service: EmbeddingService):
+    def __init__(self, collection=None, embedding_service=None):
         super().__init__(name="MilvusVectorRetriever")
-        self.collection = collection
-        self.embedding_service = embedding_service
+        # 🌟 统一资源获取
+        self.collection = collection or ResourceFactory.get_milvus_collection()
+        self.embedding_service = embedding_service or ResourceFactory.get_embedding_service()
 
     def search(self, query: str, top_k: int) -> List[SearchResult]:
-        query_vector = self.embedding_service.get_embedding(query)
+        # 调用解耦后的 embed_query 方法
+        query_vector = self.embedding_service.embed_query(query)
         
-        # 这里的 metric_type 也可以考虑放入 .env
         search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
         results = self.collection.search(
             data=[query_vector],

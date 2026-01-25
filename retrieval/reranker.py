@@ -1,16 +1,17 @@
-import os
 from typing import List
 from sentence_transformers import CrossEncoder
 from retrieval.base import SearchResult
+from config.settings import AppConfig
 
 class Reranker:
     def __init__(self):
-        # 从 .env 读取模型路径和运行设备 (cpu/mps/cuda)
-        model_path = os.getenv("RERANK_MODEL_PATH")
-        device = os.getenv("RERANK_DEVICE", "cpu")
-        if not model_path:
-            raise ValueError("❌ .env 中缺失 RERANK_MODEL_PATH 配置")
-        self.model = CrossEncoder(model_path, device=device)
+        if not AppConfig.RERANK_MODEL_PATH:
+            raise ValueError("❌ AppConfig 中缺失 RERANK_MODEL_PATH 配置")
+        
+        self.model = CrossEncoder(
+            AppConfig.RERANK_MODEL_PATH, 
+            device=AppConfig.RERANK_DEVICE
+        )
 
     def rerank(self, query: str, candidates: List[SearchResult], top_n: int) -> List[SearchResult]:
         if not candidates: return []

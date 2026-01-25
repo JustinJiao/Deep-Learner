@@ -1,13 +1,13 @@
-import os
 from typing import List
-from elasticsearch import Elasticsearch
 from retrieval.base import BaseRetriever, SearchResult
+from config.settings import AppConfig, ResourceFactory
 
 class KeywordRetriever(BaseRetriever):
-    def __init__(self, es_client: Elasticsearch):
+    def __init__(self, es_client=None):
         super().__init__(name="ESKeywordRetriever")
-        self.es = es_client
-        self.index_name = os.getenv("ES_INDEX_NAME")
+        # 🌟 统一资源获取
+        self.es = es_client or ResourceFactory.get_es_client()
+        self.index_name = AppConfig.ES_INDEX
 
     def search(self, query: str, top_k: int) -> List[SearchResult]:
         query_body = {
