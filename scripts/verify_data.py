@@ -14,7 +14,7 @@ def verify_ingestion():
 
     # 2. 检查 Milvus
     connections.connect("default", host="localhost", port="19530")
-    collection = Collection("deep_learner_vectors")
+    collection = Collection("deep_learner_knowledge")
     collection.load() # 必须先加载到内存
     print(f"\n--- [Milvus 检查] ---")
     print(f"当前 Collection 名称: {collection.name}")

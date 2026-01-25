@@ -1,75 +1,49 @@
 import os
-from typing import List, Dict, Any
-from elasticsearch import Elasticsearch, helpers
-from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType
-from langchain_openai import OpenAIEmbeddings
-from dotenv import load_dotenv
-
-load_dotenv()
+from config.settings import AppConfig, ResourceFactory
+from elasticsearch import helpers
 
 class DualWriter:
-    def __init__(self):
-        # 1. 初始化 OpenAI Embedding (用于 Milvus)
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    def __init__(self, milvus_col=None, es_client=None):
+        # 🌟 优化：如果初始化没传，直接去工厂拿单例
+        self.collection = milvus_col or ResourceFactory.get_milvus_collection()
+        self.es = es_client or ResourceFactory.get_es_client()
+        self.es_index = AppConfig.ES_INDEX
         
-        # 2. 初始化 Elasticsearch 客户端
-        self.es = Elasticsearch([os.getenv("ES_URL", "http://localhost:9200")])
-        self.es_index = "deep_learner_knowledge"
-        
-        # 3. 初始化 Milvus 连接
-        connections.connect("default", host="localhost", port="19530")
-        self.milvus_collection_name = "deep_learner_vectors"
-        self._setup_milvus()
+        # 🌟 关键：从工厂获取解耦后的 Embedding 服务
+        self.emb_service = ResourceFactory.get_embedding_service()
 
-    def _setup_milvus(self):
-        """确保 Milvus 集合存在并配置好 Schema"""
-        if not self.milvus_collection_name in [c for c in connections.list_connections()]:
-            # 定义字段：ID, 向量, 原始文本(可选), 元数据
-            fields = [
-                FieldSchema(name="doc_id", dtype=DataType.VARCHAR, is_primary=True, max_length=100),
-                FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=1536), # OpenAI 3-small 维度
-                FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535)
-            ]
-            schema = CollectionSchema(fields, "Deep-Learner 知识库向量索引")
-            self.collection = Collection(self.milvus_collection_name, schema)
-            # 创建 HNSW 索引提速
-            self.collection.create_index("vector", {"index_type": "HNSW", "metric_type": "L2", "params": {"M": 8, "efConstruction": 64}})
-        else:
-            self.collection = Collection(self.milvus_collection_name)
+    def write_all(self, data_list):
+        if not data_list: return
 
-    def write_all(self, data_list: List[Dict[str, Any]]):
-        """
-        核心分流逻辑：将 Spark 传来的字典列表同步写入两库
-        """
-        print(f"--- [DualWriter] 开始同步写入，共计 {len(data_list)} 条记录 ---")
-        
-        # 提取内容用于批量生成向量
-        texts = [item['content'] for item in data_list]
-        vectors = self.embeddings.embed_documents(texts)
+        # 1. 批量向量化 (使用更新后的接口名 embed_documents)
+        contents = [d['content'] for d in data_list]
+        try:
+            vectors = self.emb_service.embed_documents(contents)
+            
+            if vectors:
+                milvus_data = [
+                    [d['doc_id'] for d in data_list],      
+                    vectors,                               
+                    [d['content'] for d in data_list],    
+                    [d['metadata'] for d in data_list]     
+                ]
+                
+                self.collection.upsert(milvus_data)
+                self.collection.flush() 
+                print(f"✅ Milvus 成功写入 {len(data_list)} 条向量数据")
+            
+        except Exception as e:
+            print(f"❌ Milvus 写入失败: {e}")
 
-        # A. 写入 Milvus
-        milvus_data = [
-            [item['doc_id'] for item in data_list],
-            vectors,
-            texts
-        ]
-        self.collection.upsert(milvus_data)
-        self.collection.flush()
-        print("✅ Milvus 写入成功")
-
-        # B. 写入 Elasticsearch (使用 bulk 批量操作提速)
-        es_actions = [
-            {
-                "_index": self.es_index,
-                "_id": item['doc_id'],
-                "_source": {
-                    "content": item['content'],
-                    "main_topic": item['h1'],
-                    "sub_topic": item['h2'],
-                    "source": item['source']
-                }
+        # 2. ES Bulk 写入
+        actions = [{
+            "_index": self.es_index,
+            "_id": d["doc_id"],
+            "_source": {
+                "content": d["content"],
+                "metadata": d["metadata"] 
             }
-            for item in data_list
-        ]
-        helpers.bulk(self.es, es_actions)
-        print("✅ Elasticsearch 写入成功")
+        } for d in data_list]
+        
+        helpers.bulk(self.es, actions)
+        print(f"✅ Elasticsearch 文本写入成功")

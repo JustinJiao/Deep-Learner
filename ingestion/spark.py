@@ -1,67 +1,54 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, explode, udf
-from pyspark.sql.types import ArrayType, StructType, StructField, StringType
-# from .parse import parse_markdown_structure
-# from .chunk import split_into_semantic_chunks
+from pyspark import SparkContext
+from config.settings import ResourceFactory, AppConfig
+from ingestion.parsers import UniversalParser
+from ingestion.chunkers import SemanticChunker
+from ingestion.dual_writer import DualWriter
+import os
 
+# 🌟 自动定位项目根目录，确保 data 路径在任何地方执行都有效
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+absolute_docs_path = os.path.join(base_dir, AppConfig.DATA_PATH)
 
-class DeepIngestor:
-    def __init__(self, app_name="DeepLearner-V3"):
-        self.spark = SparkSession.builder.appName(app_name).getOrCreate()
-
-    def run_pipeline(self, input_path):
-        """
-        核心流水线：控制数据的读取、转换和展示
-        """
-        # 读取
-        raw_rdd = self.spark.sparkContext.wholeTextFiles(input_path)
-        
-        # 分布式转换
-        chunks_rdd = raw_rdd.flatMap(lambda x : DeepIngestor.process_file_content(x))
-        
-        # 转为结构化 DataFrame
-        df = chunks_rdd.toDF() # 自动推导 schema
-        
-        # 展开嵌套的 metadata 列，方便观察
-        return df.select(
-            col("id").alias("doc_id"),
-            col("text").alias("content"),
-            col("metadata.h1").alias("h1"),
-            col("metadata.h2").alias("h2"),
-            col("metadata.source").alias("source")
-        )
-
-    @staticmethod
-    def process_file_content(path_content):
-        """
-        组合模块 B 和 C：这个函数将被分发到各个计算节点执行
-        """
-        path, content = path_content
-        from .parse import parse_markdown_structure
-        from .chunk import split_into_semantic_chunks
-        # 1. 先解析结构
-        structured_data = parse_markdown_structure(content)
-        # 2. 再执行分块
-        chunks = split_into_semantic_chunks(structured_data)
-        
-        # 3. 注入文件名信息
-        for c in chunks:
-            c['metadata']['source'] = path
-        return chunks
-# --- 执行入口 ---
-if __name__ == "__main__":
-    pipeline = DeepIngestor()
-    # 1. 运行清洗流水线
-    final_df = pipeline.run_pipeline("data/knowledge.txt")
+def process_file(path_binary):
+    """
+    Spark RDD 处理函数：解析 -> 切分
+    """
+    path, _ = path_binary
+    local_path = path.replace("file:", "")
     
-    if final_df:
-        # 2. 将 Spark DataFrame 转为 Python 列表 (中小规模数据直接 collect)
-        # 如果数据量极大，建议在 run_pipeline 中使用 foreachPartition 分片写入
-        data_to_write = [row.asDict() for row in final_df.collect()]
-        
-        # 3. 调用双路写入服务
-        from .dual_writer import DualWriter
+    # 实例化解析组件
+    parser = UniversalParser()
+    chunker = SemanticChunker()
+    
+    # 解析并切分
+    try:
+        md_text = parser.to_markdown(local_path)
+        return chunker.split_with_overlap(md_text, local_path)
+    except Exception as e:
+        print(f"⚠️ 解析文件 {local_path} 失败: {e}")
+        return []
+
+if __name__ == "__main__":
+    print(f"🚀 Deep-Learner Ingestion 启动")
+    print(f"📂 扫描路径: {absolute_docs_path}")
+    
+    sc = SparkContext(appName="DeepLearner-Ingestion")
+    raw_rdd = sc.binaryFiles(absolute_docs_path)
+    
+    # 过滤影子文件和系统隐藏文件
+    raw_rdd = raw_rdd.filter(lambda x: 
+        not os.path.basename(x[0]).startswith("~$") and 
+        not os.path.basename(x[0]).startswith(".")
+    )
+    
+    # 1. 分布式并行处理
+    all_chunks = raw_rdd.flatMap(process_file).collect()
+    
+    if not all_chunks:
+        print("⚠️ 未发现有效数据，请检查 data/docs/ 目录。")
+    else:
+        # 2. 批量写入 (利用工厂单例)
         writer = DualWriter()
-        writer.write_all(data_to_write)
+        writer.write_all(all_chunks)
         
-        print("\n🚀 [Success] 全体 Ingestion 任务完成！")
+        print(f"🎉 流程结束：共入库 {len(all_chunks)} 个知识块。")
