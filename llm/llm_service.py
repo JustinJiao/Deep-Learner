@@ -12,7 +12,7 @@ class LLMService:
             self.llm = ChatOpenAI(
                 model=AppConfig.OPENAI_CHAT_MODEL,
                 api_key=AppConfig.OPENAI_API_KEY,
-                temperature=0 
+                temperature=0 ,
             )
         elif self.provider == "ollama":
             self.llm = ChatOllama(

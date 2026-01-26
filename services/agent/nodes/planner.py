@@ -23,5 +23,6 @@ def planner_node(state: AgentState):
     
     return {
         "plan": plan_list,
+        "current_step_idx": 0,
         "steps_log": [AgentStep(node="planner", thought=f"拆解目标: {plan_list}")]
     }
