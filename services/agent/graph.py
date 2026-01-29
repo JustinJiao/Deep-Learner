@@ -4,39 +4,44 @@ from services.agent.nodes import (
     planner_node, 
     retriever_node, 
     tutor_node, 
-    critic_node
+    critic_node,
+    rewriter_node,
+    finalizer_node
 )
-from services.agent.edges.router import grade_response_route
-
+from services.agent.edges.router import check_retrieval_loop, check_audit_loop
+from langgraph.checkpoint.memory import MemorySaver  # 🌟 1. 引入内存保存器
+# --- 图构建 ---
 def create_deep_learner_graph():
-    """
-    编排 Deep-Learner 的 Agentic RAG 流程图。
-    实现了：任务拆解 -> 混合检索 -> 教学生成 -> 逻辑反思 的闭环。
-    """
-    # 1. 声明一个基于 AgentState 的状态图
     workflow = StateGraph(AgentState)
 
-    # 2. 注册所有节点
-    workflow.add_node("planner", planner_node)      # 目标拆解
-    workflow.add_node("retriever", retriever_node)  # 知识召回 (对接 retrieval 模块)
-    workflow.add_node("tutor", tutor_node)          # 启发式教学 (对接 LLM 模块)
-    workflow.add_node("critic", critic_node)        # 逻辑审计
+    # 注册节点
+    workflow.add_node("rewriter", rewriter_node)
+    workflow.add_node("planner", planner_node)
+    workflow.add_node("retriever", retriever_node)
+    workflow.add_node("tutor", tutor_node)
+    workflow.add_node("critic", critic_node)
+    workflow.add_node("finalizer", finalizer_node)
+    memory = MemorySaver()  # 🌟 2. 创建内存保存器实例
 
-    # 3. 设定默认执行路径
-    workflow.set_entry_point("planner")             # 入口：先做规划
-    workflow.add_edge("planner", "retriever")       # 规划完去搜资料
-    workflow.add_edge("retriever", "tutor")         # 搜完资料开始教课
-    workflow.add_edge("tutor", "critic")           # 教完后接受审计
-
-    # 4. 设定条件路由 (实现循环/退出逻辑)
+    # 设置路径
+    workflow.set_entry_point("rewriter")
+    workflow.add_edge("rewriter", "planner")
+    workflow.add_edge("planner", "retriever")
+    # 迭代检索循环 (根据任务步骤数循环)
     workflow.add_conditional_edges(
-        "critic",                                   # 从审计节点开始判断
-        grade_response_route,                       # 调用决策函数
-        {
-            "re_plan": "planner",                   # 逻辑有问题，回炉重造
-            "finish": END                           # 逻辑满分，直接输出
-        }
+        "retriever",
+        check_retrieval_loop,
+        {"continue_retrieval": "retriever", "go_tutor": "tutor"}
     )
-
-    # 5. 编译图 (后续可在此处增加 checkpointer 实现断点续传)
-    return workflow.compile()
+    
+    workflow.add_edge("tutor", "critic")
+    
+    # 审计反馈循环
+    workflow.add_conditional_edges(
+        "critic",
+        check_audit_loop,
+        {"re_plan": "planner", "finish": "finalizer"}
+    )
+    
+    workflow.add_edge("finalizer", END)
+    return workflow.compile(checkpointer=memory)  # 🌟 3. 将内存保存器传递给图编译器

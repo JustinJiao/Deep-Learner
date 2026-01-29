@@ -30,52 +30,47 @@ async def start():
 
 @cl.on_message
 async def main(message: cl.Message):
-    """
-    接收用户 Query，驱动节点执行，并渲染最终的溯源回答。
-    """
     graph = cl.user_session.get("graph")
     thread_id = cl.user_session.get("thread_id")
     
-    # 构造初始状态
+    # 1. 🌟 状态协议对齐
     initial_state = {
         "query": message.content,
+        "loop_count": 0,           # 必须初始化，防止 Critic 节点报错
+        "current_step_idx": 0,     # 确保从第一步开始检索
+        "context_pool": [],        # 替换旧的 retrieved_contents
+        "source_mapping": {},      
         "steps_log": [],
-        "retrieved_contents": [],
-        "source_mapping": {},  # 🌟 接收来自 retriever 节点的映射数据
-        "response": "",
-        "metadata": {}
+        "messages": []             # 传入空列表，MemorySaver 会自动合并历史记忆
     }
 
-    # 1. 执行 Agent 逻辑 (Invoke 模式)
-    # 如果面试时想演示“思考流”，可后续开启 astream_events
-    final_state = await cl.make_async(graph.invoke)(
-        initial_state, 
-        config={"configurable": {"thread_id": thread_id}}
-    )
+    # 2. 执行推理
+    config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 50}
+    final_state = await cl.make_async(graph.invoke)(initial_state, config=config)
 
-    # 2. 渲染节点思考链路 (Steps)
-    # 这能向面试官直观展示 Planner -> Retriever -> Tutor 的决策逻辑
+    # 3. 渲染思考链路
     for step_data in final_state.get("steps_log", []):
-        async with cl.Step(name=step_data.node.upper()) as step:
-            step.output = step_data.thought
+        # 兼容处理：确保能读取 Pydantic 对象属性
+        node_name = step_data.node if hasattr(step_data, 'node') else "AGENT"
+        thought_text = step_data.thought if hasattr(step_data, 'thought') else str(step_data)
+        
+        async with cl.Step(name=node_name.upper()) as step:
+            step.output = thought_text
 
-    # 3. 构建溯源元素 (Citations)
-    # 关键：利用 source_mapping 把 ID 还原回干净的文件名
+    # 4. 🌟 溯源元素构建 (基于文件名)
     source_elements = []
-    mapping = final_state.get("source_mapping", {})
-    retrieved_docs = final_state.get("retrieved_contents", [])
+    # 使用对齐后的 context_pool
+    retrieved_docs = final_state.get("context_pool", [])
 
     for doc in retrieved_docs:
-        doc_id = doc.get("id")
-        # 从映射表中取出“脱敏”后的文件名
-        clean_file_name = mapping.get(doc_id, "未知文档")
+        file_name = doc.get("id")  # 此时 ID 就是文件名
         
-        # 元素名称必须匹配 [Source N] 中的 "Source N"
-        element_name = f"Source {doc_id}"
+        # 🌟 关键：element_name 必须与导师回答里的引用文字完全一致
+        # 如果导师回答 [test_pdf.pdf]，这里必须叫 "test_pdf.pdf"
+        element_name = file_name
         
-        # 组装侧边栏显示的内容
         display_content = (
-            f"📄 **原始文档**: {clean_file_name}\n\n"
+            f"📄 **源文件**: {file_name}\n\n"
             f"---\n\n"
             f"{doc['content']}"
         )
@@ -84,14 +79,13 @@ async def main(message: cl.Message):
             cl.Text(name=element_name, content=display_content, display="side")
         )
 
-    # 4. 发送最终答案
+    # 5. 发送最终答案
     response_text = final_state.get("response", "抱歉，导师未能生成有效回答。")
     
-    # 如果是 Critic 审计失败后的结果，增加一个警告标志
     if final_state.get("is_hallucination"):
-        response_text = "⚠️ **内容可能存在幻觉**\n\n" + response_text
+        response_text = "⚠️ **[逻辑审计] 内容可能存在引用偏差**\n\n" + response_text
 
     await cl.Message(
         content=response_text,
-        elements=source_elements  # 👈 绑定点击关联
+        elements=source_elements
     ).send()
