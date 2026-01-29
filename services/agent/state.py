@@ -4,49 +4,36 @@ from typing_extensions import TypedDict
 from operator import add
 from pydantic import BaseModel, Field
 
-# ==========================================
-# 1. 原子思考单元：用于全链路可观察性 (Observability)
-# ==========================================
-class AgentStep(BaseModel):
+# 🌟 自定义合并函数：确保 source_mapping 在多轮检索中合并而不是覆盖
+def merge_context_pool(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     """
-    记录单个节点的执行痕迹。
-    亮点：支持 LangSmith 追踪与前端思考链展示。
+    🌟 核心修复：直接基于文件名(id)进行去重
     """
-    node: str = Field(..., description="当前执行任务的节点名称")
-    thought: str = Field(..., description="智能体的思考过程/中间逻辑")
-    timestamp: float = Field(default_factory=time.time, description="执行时间戳")
+    # 以文件名作为 key 进行去重
+    merged = {doc['id']: doc for doc in existing}
+    for doc in new:
+        merged[doc['id']] = doc
+    return list(merged.values())
 
-# ==========================================
-# 2. 核心状态协议：驱动全流程的数据载体
-# ==========================================
+class AgentStep(BaseModel):
+    node: str = Field(..., description="节点名称")
+    thought: str = Field(..., description="思考过程")
+    timestamp: float = Field(default_factory=time.time)
+
 class AgentState(TypedDict):
-    # --- [基础输入层] 所有节点共享 ---
-    query: str  # 用户原始输入
+    query: str                       # 原始用户输入
+    rewritten_query: str             # 对齐后的标准意图
+    plan: List[str]                  # Planner 拆解的子任务列表
+    current_step_idx: int            # 迭代检索的当前索引
     
-    # --- [Planner 节点专用] 任务编排 ---
-    # 作用：将复杂问题拆解为可执行的子目标
-    plan: List[str] 
-    current_step_idx: int # 记录当前执行到计划的第几步
+    # 使用 Annotated 确保增量更新
+    context_pool: Annotated[List[Dict[str, Any]], merge_context_pool] 
+    # source_mapping: Annotated[Dict[str, str], merge_mapping] 
     
-    # --- [Retriever 节点专用] 知识召回与脱敏 ---
-    # 作用：实现物理路径与逻辑 ID 的隔离，保护服务器隐私
-    optimized_query: Optional[str]              # 经过 LLM 重写后的检索词
-    retrieved_contents: List[Dict[str, Any]]    # 检索出的纯净正文块 (含逻辑 ID)
-    source_mapping: Dict[int, str]              # 🌟 核心亮点：ID -> 原始文件名映射表
+    response: str                    # Tutor 生成的回答
+    critique: Optional[str]          # Critic 的反馈
+    is_hallucination: bool           # 幻觉标记
+    loop_count: int                  # 整体重试计数
     
-    # --- [Tutor 节点专用] 教学生成 ---
-    # 作用：基于检索内容生成带引用的启发式回答
-    response: str # 最终生成的导师回答内容
-    
-    # --- [Critic 节点专用] 逻辑审计 ---
-    # 作用：进行幻觉检测与逻辑一致性校验，决定是否回炉重造
-    critique: Optional[str]   # 审计意见 (PASS/FAIL)
-    is_hallucination: bool    # 幻觉标记位
-    
-    # --- [全局增量层] 使用 Annotated[..., add] 实现非覆盖式更新 ---
-    # 作用：记录 Agent 的生命周期全过程
-    steps_log: Annotated[List[AgentStep], add]  # 思考链日志 (按顺序累加)
-    messages: Annotated[List[Any], add]         # 聊天历史 (支持多轮对话上下文)
-    
-    # --- [扩展层] 基础设施配置 ---
-    metadata: Dict[str, Any] # 存储如 session_id, model_version 等元数据
+    steps_log: Annotated[List[AgentStep], add]
+    messages: Annotated[List[Any], add]

@@ -1,11 +1,10 @@
 import sys
 import os
-
+import uuid
 # 确保项目根目录在系统路径中，防止 Import Error
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from services.agent.graph import create_deep_learner_graph
-from schemas.agent_state import AgentState
 from config.settings import AppConfig
 from colorama import Fore, Style, init
 
@@ -49,51 +48,55 @@ def run_deep_learner():
     # 1. 初始化大脑 (编译 LangGraph)
     app = create_deep_learner_graph()
 
+    # 🌟 为本次 CLI 会话生成一个统一的 Thread ID，确保多轮对话记忆生效
+    session_thread_id = f"cli_session_{uuid.uuid4().hex[:6]}"
+    config = {"configurable": {"thread_id": session_thread_id}, "recursion_limit": 50}
+
     while True:
         user_input = input(Fore.YELLOW + "\n👨‍💻 请输入你的学习问题 (输入 'exit' 退出): ")
         if user_input.lower() in ['exit', 'quit', 'q']:
             break
 
-        # 2. 初始化工作记忆状态
-        # 严格遵循我们在 schemas/agent_state.py 中定义的协议
-        initial_state = {
+        # 2. 🌟 修正后的初始化状态
+        # 只需要传入该轮次必要的触发参数，其他状态由 Graph 内部维护或 Finalizer 重置
+        initial_input = {
             "query": user_input,
-            "plan": [],
-            "retrieved_contents": [],
-            "response": "",
-            "is_hallucination": False,
-            "steps_log": [],
-            "messages": [],
-            "metadata": {"start_time": os.times()[4]}
+            "loop_count": 0,           # 确保从 0 开始计数
+            "current_step_idx": 0,     # 确保从第一步开始规划
+            "context_pool": [],        # 清空本轮临时知识池
+            "source_mapping": {},      # 清空本轮映射
+            "steps_log": []            # 清空本轮思考链
         }
 
-        # 3. 运行 Agent 流水线
         print(Fore.GREEN + "\n🧠 Deep-Learner 正在思考中...")
         
-        # 工业级配置：这里可以传入 thread_id 供后期接入持久化记忆 (Memory)
-        config = {"configurable": {"thread_id": "test_session_001"}}
-        
         try:
-            # 执行图并获取最终状态
-            final_state = app.invoke(initial_state, config=config)
+            # 3. 运行 Agent 流水线
+            # 这里不需要传入 messages，MemorySaver 会根据 thread_id 自动加载历史
+            final_state = app.invoke(initial_input, config=config)
 
-            # 4. 展示决策链路 (思考链可视化)
+            # 4. 展示决策链路
             print(Fore.MAGENTA + "\n--- 🛰️ Agent 决策链路 (Thought Chain) ---")
             for step in final_state.get("steps_log", []):
-                print(Fore.WHITE + f"[{step.node.upper()}] {step.thought}")
+                # 兼容处理：支持对象或字典格式
+                node_name = step.node if hasattr(step, 'node') else step.get('node', 'UNKNOWN')
+                thought = step.thought if hasattr(step, 'thought') else step.get('thought', '')
+                print(Fore.WHITE + f"[{node_name.upper()}] {thought}")
 
             # 5. 输出最终教学内容
             print(Fore.CYAN + "\n--- 👨‍🏫 导师回答 ---")
             print(Fore.WHITE + final_state.get("response", "未能生成回答"))
 
-            # 6. 输出审计意见 (如果审计未通过，用户能看到反思结果)
+            # 6. 审计提醒
             if final_state.get("is_hallucination"):
-                print(Fore.RED + "\n⚠️ 警告：该内容可能包含幻觉，审计员建议重新校验。")
+                print(Fore.RED + "\n⚠️ 警告：该内容未通过逻辑审计，可能包含幻觉。")
             else:
-                print(Fore.GREEN + "\n✅ 逻辑审计通过，内容准确性达标。")
+                print(Fore.GREEN + "\n✅ 逻辑审计通过。")
 
         except Exception as e:
             print(Fore.RED + f"❌ 运行异常: {str(e)}")
+            import traceback
+            traceback.print_exc() # 打印堆栈方便排查为何节点报错
 
 if __name__ == "__main__":
     if debug_infrastructure():

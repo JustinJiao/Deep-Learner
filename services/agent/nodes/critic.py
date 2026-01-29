@@ -2,41 +2,21 @@
 from services.agent.state import AgentState, AgentStep
 from config.settings import ResourceFactory
 from llm.prompts import CRITIC_SYSTEM_PROMPT, CRITIC_HUMAN_PROMPT_TEMPLATE, LOG_TEMPLATES
-
+import time
 def critic_node(state: AgentState):
-    """
-    审计节点：对比检索内容与生成内容，检测幻觉与逻辑错误
-    """
-    print("--- [Node] 执行逻辑审计节点 ---")
+    """5. 逻辑审计：多维度校验"""
+    print("--- [Node] 逻辑审计与回答校验 ---")
+    llm = ResourceFactory.get_llm_service()
+    context_str = str(state["context_pool"])
     
-    llm_service = ResourceFactory.get_llm_service()
+    prompt = CRITIC_HUMAN_PROMPT_TEMPLATE.format(context=context_str, response=state['response'])
+    result = llm.chat_completion(prompt=prompt, system_prompt=CRITIC_SYSTEM_PROMPT)
     
-    # 1. 准备审计素材
-    docs = state.get("retrieved_contents", [])
-    context_str = "\n\n".join([f"资料{i+1}: {d['content']}" for i, d in enumerate(docs)])
-    tutor_response = state.get("response", "")
-    
-    # 2. 构造审计 Prompt
-    human_prompt = CRITIC_HUMAN_PROMPT_TEMPLATE.format(
-        context=context_str,
-        response=tutor_response
-    )
-    
-    # 3. 调用 LLM 进行审计
-    critique_result = llm_service.chat_completion(
-        prompt=human_prompt,
-        system_prompt=CRITIC_SYSTEM_PROMPT
-    )
-    
-    # 4. 解析审计结果
-    is_fail = "[FAIL]" in critique_result.upper()
-    
-    # 根据结果选择日志模版
-    log_key = "critic_fail" if is_fail else "critic_pass"
-    
-    # 返回更新后的状态
+    is_fail = "[FAIL]" in result.upper()
+    current_loop = state.get("loop_count", 0)
     return {
-        "critique": critique_result,
-        "is_hallucination": is_fail,  # 🌟 修正：确保这里与 router.py 的判断逻辑一致
-        "steps_log": [AgentStep(node="critic", thought=LOG_TEMPLATES[log_key])]
+        "critique": result,
+        "is_hallucination": is_fail,
+        "loop_count": current_loop + 1 if is_fail else current_loop,
+        "steps_log": [AgentStep(node="critic", thought=f"审计结果: {'未通过' if is_fail else '通过'}", timestamp=time.time())]
     }
