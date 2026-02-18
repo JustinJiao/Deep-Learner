@@ -1,9 +1,10 @@
 # ==========================================
-# 1. 敏感信息
+# 1. 环境与敏感信息
 # ==========================================
 .env
 *.env
 .env.*
+.envrc
 
 # ==========================================
 # 2. Python 缓存与构建产物
@@ -12,32 +13,74 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.pyd
+
+# 虚拟环境
 .venv/
 venv/
+env/
+
+# 打包产物
 *.egg-info/
 build/
 dist/
+.eggs/
+
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# coverage
+.coverage
+htmlcov/
 
 # ==========================================
-# 3. Chainlit 特有忽略 (解决截图中的翻译文件)
+# 3. 数据与向量数据库
+# ==========================================
+data/
+storage/
+milvus_data/
+*.db
+*.sqlite3
+*.log
+
+# 不要上传 PDF/大文件
+*.pdf
+
+# ==========================================
+# 4. HuggingFace / 模型缓存
+# ==========================================
+.cache/
+huggingface/
+*.pt
+*.bin
+*.safetensors
+
+# ==========================================
+# 5. Chainlit / Web UI
 # ==========================================
 .chainlit/translations/
 interface/.chainlit/translations/
-# 忽略那些长哈希值的临时文件
-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*
 
 # ==========================================
-# 4. 系统与 IDE 文件
+# 6. 系统与 IDE 文件
 # ==========================================
 .DS_Store
 .vscode/
 .idea/
 
 # ==========================================
-# 5. 数据与日志 (防止上传巨大 PDF)
+# 7. 其他
 # ==========================================
-data/docs/
-data/storage/
-*.pdf
+*.swp
+*.tmp
+*.zip
+.files/
+interface/.files/
+database/
 *.db
-*.log
+interface/.chainlit/
+interface/.files/
+.chainlit/

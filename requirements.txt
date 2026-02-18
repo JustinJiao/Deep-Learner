@@ -1,0 +1,52 @@
+# ===============================
+# Core / Typing
+# ===============================
+typing-extensions>=4.8
+pydantic>=2.6,<3
+python-dotenv>=1.0.0
+
+# ===============================
+# LangChain / LLM
+# ===============================
+langchain>=0.1.20,<0.3
+langchain-core>=0.1.50
+langchain-openai>=0.1.8
+langchain-ollama>=0.1.2
+langchain-community>=0.0.30
+openai>=1.12.0
+
+# ===============================
+# Embedding / Rerank
+# ===============================
+numpy==1.26.4
+torch==2.1.2
+sentence-transformers>=2.2,<3
+transformers>=4.33,<4.38
+accelerate<0.28
+peft<0.9
+
+# ===============================
+# Retrieval / Vector DB
+# ===============================
+pymilvus>=2.4.0
+elasticsearch>=8.10.0
+scikit-learn>=1.3
+tqdm>=4.66
+
+# ===============================
+# Ingestion / Parsing
+# ===============================
+unstructured[all-docs]>=0.12.0
+markdown>=3.5
+
+# ===============================
+# Testing
+# ===============================
+pytest>=7.4
+pytest-mock>=3.12
+
+# ===============================
+# Optional Dev Utils
+# ===============================
+rich>=13.7
+loguru>=0.7
