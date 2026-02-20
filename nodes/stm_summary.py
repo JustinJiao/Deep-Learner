@@ -1,10 +1,13 @@
 # nodes/stm_summary.py
 
+import time
+
 from core.state import AgentState, StepLog
 from memory.stm import STM
 from session.store import get_session, save_session
 from core.llm_call import run_prompt
 from llm.prompts.stm_compress import STMCompressPrompt
+from nodes.log_utils import clip_text, preview_turns
 
 
 def stm_summary_node(state: AgentState) -> AgentState:
@@ -16,9 +19,25 @@ def stm_summary_node(state: AgentState) -> AgentState:
 
     # 这里用 STM 的真实指针判断是否需要压缩（不要依赖 stm_write 的 bool 标记）
     if not stm.need_compress(threshold=threshold):
+        state.setdefault("steps_log", []).append(
+            StepLog(
+                node="stm_summary",
+                info={
+                    "memory": {
+                        "need_compress": False,
+                        "messages_count": len(stm.messages),
+                        "summary_blocks": len(stm.summary),
+                        "compressed_until": stm.compressed_until,
+                    },
+                },
+                timestamp=time.time(),
+            )
+        )
         return state
 
     chunk = stm.get_chunk_to_compress(threshold=threshold)
+    compressed_until_before = stm.compressed_until
+    summary_blocks_before = len(stm.summary)
 
     # turn -> 可读文本（供 LLM 压缩）
     lines = []
@@ -45,7 +64,49 @@ def stm_summary_node(state: AgentState) -> AgentState:
         save_session(state["session_id"], ctx)
 
         state.setdefault("steps_log", []).append(
-            StepLog(node="stm_summary", info=f"summary merged until={stm.compressed_until}")
+            StepLog(
+                node="stm_summary",
+                info={
+                    "memory": {
+                        "need_compress": True,
+                        "chunk_preview": preview_turns(chunk),
+                        "compressed_until_before": compressed_until_before,
+                        "compressed_until_after": stm.compressed_until,
+                        "summary_blocks_before": summary_blocks_before,
+                        "summary_blocks_after": len(stm.summary),
+                    },
+                    "llm_input": {
+                        "compress_chunk_text_preview": clip_text(state.get("compress_chunk_text", ""), 180),
+                    },
+                    "llm_output": {
+                        "stm_compressed_text_preview": clip_text(compressed_text, 180),
+                    },
+                },
+                timestamp=time.time(),
+            )
+        )
+    else:
+        state.setdefault("steps_log", []).append(
+            StepLog(
+                node="stm_summary",
+                info={
+                    "memory": {
+                        "need_compress": True,
+                        "chunk_preview": preview_turns(chunk),
+                        "compressed_until_before": compressed_until_before,
+                        "compressed_until_after": stm.compressed_until,
+                        "summary_blocks_before": summary_blocks_before,
+                        "summary_blocks_after": len(stm.summary),
+                    },
+                    "llm_input": {
+                        "compress_chunk_text_preview": clip_text(state.get("compress_chunk_text", ""), 180),
+                    },
+                    "llm_output": {
+                        "stm_compressed_text_preview": "",
+                    },
+                },
+                timestamp=time.time(),
+            )
         )
 
     return state

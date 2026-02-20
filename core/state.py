@@ -1,7 +1,7 @@
 # core/state.py
 
 import time
-from typing import List, Dict, Any, Optional, Literal, Annotated
+from typing import List, Dict, Any, Optional, Literal, Annotated, Union
 from typing_extensions import TypedDict
 from pydantic import BaseModel, Field
 from operator import add
@@ -10,7 +10,7 @@ from core.plan import ExecutionPlan
 
 class StepLog(BaseModel):
     node: str
-    info: str
+    info: Any
     timestamp: float = Field(default_factory=time.time)
 
 

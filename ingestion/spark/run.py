@@ -1,13 +1,19 @@
+import os
+
 from pyspark import SparkContext
-from config.settings import ResourceFactory, AppConfig
 from ingestion.parsers.universal import UniversalParser
 from ingestion.chunkers.semantic import SemanticChunker
 from ingestion.writers.dual_writer import DualWriter
-import os
 
-# 🌟 自动定位项目根目录，确保 data 路径在任何地方执行都有效
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-absolute_docs_path = os.path.join(base_dir, AppConfig.DATA_PATH)
+# 自动定位项目根目录，确保 data 路径在任何地方执行都有效
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+relative_docs_path = os.getenv("DATA_PATH", "data/docs")
+if os.path.isabs(relative_docs_path):
+    absolute_docs_path = relative_docs_path
+else:
+    absolute_docs_path = os.path.join(project_root, relative_docs_path)
 
 def process_file(path_binary):
     """

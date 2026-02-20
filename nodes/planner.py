@@ -1,7 +1,10 @@
 # nodes/planner.py
+import time
+
 from core.state import AgentState, StepLog
 from core.plan import ExecutionPlan
 from config.settings import AppConfig
+from nodes.log_utils import clip_text
 
 
 def planner_node(state: AgentState) -> AgentState:
@@ -31,6 +34,23 @@ def planner_node(state: AgentState) -> AgentState:
     state.setdefault("repair_hint", "")
 
     state.setdefault("steps_log", []).append(
-        StepLog(node="planner", info=f"plan={steps}, direct={is_direct}")
+        StepLog(
+            node="planner",
+            info={
+                "state": {
+                    "query_preview": clip_text(state.get("query", ""), 180),
+                    "intent": state.get("intent", {}),
+                    "is_direct_path": is_direct,
+                    "loop_count": state.get("loop_count"),
+                    "plan": {
+                        "steps": steps,
+                        "step_idx": state["plan"].step_idx,
+                        "current_step": state["plan"].current_step() if steps else None,
+                        "max_loops": state["plan"].max_loops,
+                    },
+                },
+            },
+            timestamp=time.time(),
+        )
     )
     return state

@@ -29,7 +29,7 @@
 - **LLM 编排**: LangGraph
 - **向量数据库**: Milvus
 - **全文检索**: Elasticsearch (Hybrid Search)
-- **前端交互**: Chainlit (支持侧边栏原文预览)
+- **前端交互**: Streamlit
 
 ---
 
@@ -40,7 +40,7 @@
 | **语言** | Python 3.9+ |
 | **Agent 框架** | LangGraph (State-centric design) |
 | **基础模型** | OpenAI / Claude (通过 Factory 模式接入) |
-| **UI 框架** | Chainlit |
+| **UI 框架** | Streamlit |
 
 ---
 
@@ -55,7 +55,11 @@ pip install -e .
 
 ## 3. 启动服务
 ```bash
-chainlit run interface/app.py -w
+streamlit run ui_streamlit.py
+```
+可选 CLI 调试入口：
+```bash
+python -m scripts.main
 ```
 ### 👨‍💻 关于作者
 关于本项目由 JHU 学生 Justin Jiao 开发，专注于 AI Agent 应用工程化实践。如有任何问题或建议，欢迎通过 GitHub 提交 Issue 或 Pull Request。

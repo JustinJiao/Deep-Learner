@@ -1,8 +1,11 @@
 # nodes/stm_read.py
 
+import time
+
 from session.store import get_session
 from memory.stm import STM
 from core.state import AgentState, StepLog
+from nodes.log_utils import clip_text, preview_messages, preview_turns
 
 
 def stm_read_node(state: AgentState) -> AgentState:
@@ -38,7 +41,21 @@ def stm_read_node(state: AgentState) -> AgentState:
     state["recent_messages"] = messages_for_llm
 
     state.setdefault("steps_log", []).append(
-        StepLog(node="stm_read", info="mapped stm -> state")
+        StepLog(
+            node="stm_read",
+            info={
+                "memory": {
+                    "summary_preview": clip_text(state.get("short_term_memory", ""), 180),
+                    "recent_turns_preview": preview_turns(stm.recent_messages),
+                    "messages_count": len(stm.messages),
+                    "summary_blocks": len(stm.summary),
+                },
+                "state": {
+                    "recent_messages_for_llm_preview": preview_messages(messages_for_llm),
+                },
+            },
+            timestamp=time.time(),
+        )
     )
 
     return state

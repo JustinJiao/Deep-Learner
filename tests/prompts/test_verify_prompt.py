@@ -7,7 +7,8 @@ from ._helpers import (
 
 def test_verify_reads_ok():
     state = {
-        "response": "Spark 可以通过 --executor-memory 设置"
+        "response": "Spark 可以通过 --executor-memory 设置",
+        "context_pool": [],
     }
     assert_validate_reads_ok(VerifyPrompt, state)
 

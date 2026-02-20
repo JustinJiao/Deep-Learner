@@ -1,5 +1,5 @@
 import pytest
-from llm.prompts.base import PromptContract
+from llm.prompts.base import PromptContract, PromptContractError
 
 
 class BadPrompt(PromptContract):
@@ -13,10 +13,10 @@ class BadPrompt(PromptContract):
 
 
 def test_missing_reads():
-    with pytest.raises(ValueError):
-        BadPrompt.validate_reads({})
+    with pytest.raises(PromptContractError):
+        BadPrompt().validate_reads({})
 
 
 def test_missing_writes():
-    with pytest.raises(ValueError):
-        BadPrompt.validate_writes({"a": 1})
+    with pytest.raises(PromptContractError):
+        BadPrompt().validate_writes({"a": 1})
