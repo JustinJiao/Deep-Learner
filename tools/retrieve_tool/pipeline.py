@@ -14,6 +14,15 @@ class RetrievalPipeline:
         self.keyword_r = keyword_r or KeywordRetriever()
         self.reranker = reranker or Reranker()
         self.rrf_k = AppConfig.RRF_K
+        self.score_gate_enabled = AppConfig.RETRIEVAL_SCORE_GATE_ENABLED
+        self.min_rerank_score = AppConfig.RETRIEVAL_MIN_RERANK_SCORE
+
+    def _apply_rerank_score_gate(
+        self, results: List[SearchResult]
+    ) -> List[SearchResult]:
+        if not self.score_gate_enabled:
+            return results
+        return [doc for doc in results if doc.score >= self.min_rerank_score]
 
     def _rrf_fusion(self, v_results: List[SearchResult], k_results: List[SearchResult]) -> List[SearchResult]:
         r"""
@@ -56,6 +65,10 @@ class RetrievalPipeline:
         
         # 3. 精排
         if self.reranker and candidates:
-            return self.reranker.rerank(query, candidates, top_n=final_top_k)
+            reranked = self.reranker.rerank(
+                query, candidates, top_n=len(candidates)
+            )
+            filtered = self._apply_rerank_score_gate(reranked)
+            return filtered[:final_top_k]
         
         return candidates[:final_top_k]

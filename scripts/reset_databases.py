@@ -1,4 +1,5 @@
 from pymilvus import connections, utility
+from config.factory import ResourceFactory
 from config.settings import AppConfig
 
 
@@ -23,5 +24,23 @@ def reset_milvus_collections():
     print("Milvus reset complete.")
 
 
-if __name__ == "__main__":
+def reset_es_index():
+    es = ResourceFactory.get_es_client()
+    index_name = AppConfig.ES_INDEX
+
+    if es.indices.exists(index=index_name):
+        es.indices.delete(index=index_name)
+        print(f"Dropped ES index: {index_name}")
+    else:
+        print(f"ES index not found, skip: {index_name}")
+
+    print("Elasticsearch reset complete.")
+
+
+def reset_databases():
     reset_milvus_collections()
+    reset_es_index()
+
+
+if __name__ == "__main__":
+    reset_databases()

@@ -1,18 +1,10 @@
-# memory/ltm.py
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from config.factory import ResourceFactory
 from config.settings import AppConfig
-
-
-# memory/ltm.py
-
-import time
-from typing import List, Dict
-from config.factory import ResourceFactory
 
 
 class LTM:
@@ -21,13 +13,11 @@ class LTM:
         self.collection = ResourceFactory.get_milvus_ltm_collection()
         self.embedding_service = ResourceFactory.get_embedding_service()
 
-    def upsert(self, entries: List[Dict]):
-
+    def upsert(self, entries: List[Dict]) -> int:
         if not entries:
             return 0
 
         rows = []
-
         for entry in entries:
             key = entry["key"]
             content = entry["content"]
@@ -36,39 +26,63 @@ class LTM:
             timestamp = int(time.time())
 
             vector = self.embedding_service.embed_query(content)
-
-            rows.append({
-                "key": key,
-                "vector": vector,
-                "content": content,
-                "type": entry_type,
-                "score": score,
-                "timestamp": timestamp,
-            })
+            rows.append(
+                {
+                    "key": key,
+                    "vector": vector,
+                    "content": content,
+                    "type": entry_type,
+                    "score": score,
+                    "timestamp": timestamp,
+                }
+            )
 
         self.collection.upsert(rows)
         self.collection.flush()
-
         return len(rows)
 
-    def recall(self, query: str, top_k: int = 3):
+    def recall(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        min_score: Optional[float] = None,
+    ) -> List[str]:
+        limit = top_k if top_k is not None else AppConfig.LTM_RECALL_TOP_K
+        threshold = (
+            min_score if min_score is not None else AppConfig.LTM_RECALL_THRESHOLD
+        )
+        threshold = max(-1.0, min(1.0, float(threshold)))
+        if limit <= 0:
+            return []
 
-        vector = self.embedding_service.embed_query(query)
+        prefix = (AppConfig.LTM_SEARCH_PREFIX or "").strip()
+        query_for_embed = f"{prefix} {query}".strip() if prefix else query
+        vector = self.embedding_service.embed_query(query_for_embed)
 
         results = self.collection.search(
             data=[vector],
             anns_field="vector",
             param={
                 "metric_type": "COSINE",
-                "params": {"ef": 64}
+                "params": {"ef": 64},
             },
-            limit=top_k,
-            output_fields=["content"]
+            limit=limit,
+            output_fields=["content"],
         )
 
-        memories = []
+        memories: List[str] = []
+        seen = set()
         for hits in results:
             for hit in hits:
-                memories.append(hit.entity.get("content"))
+                score = float(getattr(hit, "distance", 0.0) or 0.0)
+                if score < threshold:
+                    continue
+
+                content = hit.entity.get("content")
+                if not content or content in seen:
+                    continue
+
+                seen.add(content)
+                memories.append(content)
 
         return memories

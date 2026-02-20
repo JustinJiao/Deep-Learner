@@ -20,6 +20,10 @@ class VerifyPrompt(PromptContract):
     - retrieve
     - query_rewrite
 
+    输出规则（必须遵守）：
+    - 当 is_hallucination = false 时，error_type 必须是空字符串，next_step 必须是空字符串。
+    - 当 is_hallucination = true 时，error_type 和 next_step 必须填写为上面的枚举值。
+
     返回 JSON:
     {
       "is_hallucination": true/false,

@@ -4,8 +4,8 @@ from config.factory import ResourceFactory
 from ingestion.chunkers.semantic import SemanticChunker
 from ingestion.writers.dual_writer import DualWriter
 from ingestion.parsers.universal import UniversalParser
+from utils.crypto_utils import generate_content_id
 import os
-import uuid
 
 
 def rebuild():
@@ -45,15 +45,22 @@ def rebuild():
 
             data_list = []
             for idx, chunk in enumerate(chunks):
-                doc_id = f"{file}_{idx}_{uuid.uuid4().hex[:8]}"
+                content = chunk["content"] if isinstance(chunk, dict) else chunk
+                doc_id = generate_content_id(content)
+                chunk_metadata = (
+                    dict(chunk.get("metadata", {}))
+                    if isinstance(chunk, dict)
+                    else {}
+                )
+                chunk_metadata.update({
+                    "source": path,
+                    "chunk_index": idx,
+                })
 
                 data_list.append({
                     "doc_id": doc_id,
-                    "content": chunk["content"] if isinstance(chunk, dict) else chunk,
-                    "metadata": {
-                        "source": path,
-                        "chunk_index": idx,
-                    }
+                    "content": content,
+                    "metadata": chunk_metadata,
                 })
 
             writer.write_all(data_list)

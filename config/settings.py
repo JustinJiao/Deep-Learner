@@ -1,6 +1,7 @@
 # config/settings.py
 import os
 from dotenv import load_dotenv
+from utils.config_utils import env_bool
 
 load_dotenv()
 
@@ -50,6 +51,13 @@ class AppConfig:
     RRF_K = int(os.getenv("RRF_K", 60))
     RECALL_TOP_K = int(os.getenv("RECALL_TOP_K", 50))
     FINAL_TOP_K = int(os.getenv("FINAL_TOP_K", 5))
+    # 质量门控（Rerank 后生效）
+    RETRIEVAL_SCORE_GATE_ENABLED = env_bool(
+        "RETRIEVAL_SCORE_GATE_ENABLED", True
+    )
+    RETRIEVAL_MIN_RERANK_SCORE = float(
+        os.getenv("RETRIEVAL_MIN_RERANK_SCORE", "0.05")
+    )
 
     # Reranker
     RERANK_MODEL_PATH = os.getenv("RERANK_MODEL_PATH")
@@ -60,11 +68,11 @@ class AppConfig:
         "MILVUS_LTM_COLLECTION", "user_long_term_memory"
     )
 
-    LTM_SEARCH_PREFIX = os.getenv("LTM_SEARCH_PREFIX", "search_query: ")
-    LTM_RECALL_THRESHOLD = float(os.getenv("LTM_RECALL_THRESHOLD", 0.4))
+    LTM_SEARCH_PREFIX = os.getenv("LTM_SEARCH_PREFIX", "search_query:")
+    LTM_RECALL_THRESHOLD = float(os.getenv("LTM_RECALL_THRESHOLD", "0.4"))
     LTM_RECALL_TOP_K = int(os.getenv("LTM_RECALL_TOP_K", 5))
-    LTM_IMPORTANCE_THRESHOLD = int(
-        os.getenv("LTM_IMPORTANCE_THRESHOLD", 7)
+    LTM_IMPORTANCE_THRESHOLD = float(
+        os.getenv("LTM_IMPORTANCE_THRESHOLD", "0.7")
     )
 
     # === 5. 短期记忆 (STM) ===

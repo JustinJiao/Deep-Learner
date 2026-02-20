@@ -1,6 +1,7 @@
 # nodes/recall_ltm.py
 import time
 
+from config.settings import AppConfig
 from core.state import AgentState, StepLog
 from memory.ltm import LTM
 from nodes.log_utils import clip_text
@@ -20,6 +21,8 @@ def recall_ltm_node(state: AgentState) -> AgentState:
                     "query_preview": clip_text(state.get("query", ""), 180),
                 },
                 "memory": {
+                    "recall_top_k": AppConfig.LTM_RECALL_TOP_K,
+                    "recall_threshold": AppConfig.LTM_RECALL_THRESHOLD,
                     "memory_count": len(memories),
                     "memories_preview": [clip_text(m, 160) for m in memories[:4]],
                 },
