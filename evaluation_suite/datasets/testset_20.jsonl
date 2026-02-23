@@ -1,0 +1,20 @@
+{"id":"t001","question":"Python 开发中推荐用什么方式做环境隔离？","ground_truth_answer":"建议使用 venv 或 conda 建立隔离环境。","ground_truth_docs":["test_markdown.md"]}
+{"id":"t002","question":"虚拟环境管理可以用哪些工具？","ground_truth_answer":"文档提到可以使用 venv 或 conda 进行虚拟环境管理。","ground_truth_docs":["test_markdown.md"]}
+{"id":"t003","question":"示例代码中的 check_environment 函数主要做什么？","ground_truth_answer":"该函数打印 Python 版本，并根据 sys.prefix 判断是否处于虚拟环境。","ground_truth_docs":["test_markdown.md"]}
+{"id":"t004","question":"代码是如何判断当前是否在虚拟环境中的？","ground_truth_answer":"通过判断 sys.prefix 中是否包含 'venv' 来判断是否在虚拟环境中。","ground_truth_docs":["test_markdown.md"]}
+{"id":"t005","question":"未检测到虚拟环境时会输出什么提示？","ground_truth_answer":"会输出“警告: 未检测到虚拟环境”。","ground_truth_docs":["test_markdown.md"]}
+{"id":"t006","question":"Transformer 中 attention 机制的核心作用是什么？","ground_truth_answer":"注意力机制让模型动态关注输入序列不同位置的信息，从而捕捉长距离依赖。","ground_truth_docs":["test_pdf.pdf"]}
+{"id":"t007","question":"缩放点积注意力的公式是什么？","ground_truth_answer":"公式是 Attention(Q, K, V) = softmax(QK^T/sqrt(d_k))V。","ground_truth_docs":["test_pdf.pdf"]}
+{"id":"t008","question":"在注意力计算里 Q、K、V 分别参与了什么？","ground_truth_answer":"注意力计算涉及查询 Query、键 Key、值 Value，并按缩放点积注意力公式计算。","ground_truth_docs":["test_pdf.pdf"]}
+{"id":"t009","question":"为什么多头注意力有助于提升语义表达？","ground_truth_answer":"因为它把 Q、K、V 映射到多个子空间，从多个维度学习语义特征。","ground_truth_docs":["test_pdf.pdf"]}
+{"id":"t010","question":"文档中 Transformer 与 RNN 在长文本任务上的结论是什么？","ground_truth_answer":"在长文本处理任务中，Transformer 相比传统 RNN 具有更强并行计算能力和更优收敛速度。","ground_truth_docs":["test_pdf.pdf"]}
+{"id":"t011","question":"企业级 RAG 方案想解决什么核心问题？","ground_truth_answer":"目标是解决企业内部文档搜索效率低的问题，通过 LLM 与私有知识库结合提升检索能力。","ground_truth_docs":["test_word.docx"]}
+{"id":"t012","question":"该方案的核心技术路径包含哪些层？","ground_truth_answer":"核心技术路径包括数据层、处理层和存储层。","ground_truth_docs":["test_word.docx"]}
+{"id":"t013","question":"数据层支持哪些类型的数据输入？","ground_truth_answer":"数据层支持 PDF、Word、PPT 等非结构化数据输入。","ground_truth_docs":["test_word.docx"]}
+{"id":"t014","question":"处理层采用什么技术来提高摄入效率？","ground_truth_answer":"处理层采用 Spark 并行清洗，提升海量数据处理效率。","ground_truth_docs":["test_word.docx"]}
+{"id":"t015","question":"存储层中 Milvus 和 Elasticsearch 的分工是什么？","ground_truth_answer":"Milvus 存储语义向量，Elasticsearch 存储关键词索引。","ground_truth_docs":["test_word.docx"]}
+{"id":"t016","question":"系统部署时对网络环境有什么要求？","ground_truth_answer":"系统必须部署在内网环境。","ground_truth_docs":["test_word.docx"]}
+{"id":"t017","question":"API Key 在该方案中应如何管理？","ground_truth_answer":"所有 API Key 必须通过环境变量加密存储，不可明文硬编码。","ground_truth_docs":["test_word.docx"]}
+{"id":"t018","question":"为什么强调不能在代码中硬编码敏感信息？","ground_truth_answer":"因为方案强调安全性，要求通过环境变量管理密钥并禁止硬编码敏感信息。","ground_truth_docs":["test_word.docx"]}
+{"id":"t019","question":"该方案是把 LLM 与什么结合来提升检索效果？","ground_truth_answer":"方案是将大语言模型与私有知识库结合，并引入向量检索提升精准召回。","ground_truth_docs":["test_word.docx"]}
+{"id":"t020","question":"方案里引入向量检索的目的是什么？","ground_truth_answer":"引入向量检索是为了实现语义级别的精准召回。","ground_truth_docs":["test_word.docx"]}

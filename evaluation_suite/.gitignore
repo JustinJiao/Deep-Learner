@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+
+# Evaluation outputs
+outputs/*
+!outputs/.gitkeep
+
+# Local HF/generated evaluation data (large, reproducible)
+hf_data/
+datasets/hf_testset/
+datasets/hf_testset_*/
+datasets/*/data-*.arrow
+datasets/*/dataset_info.json
+datasets/*/state.json

@@ -19,6 +19,8 @@ class LLMService:
                 model=AppConfig.OPENAI_CHAT_MODEL,
                 api_key=AppConfig.OPENAI_API_KEY,
                 temperature=0,
+                timeout=60,
+                max_retries=2,
             )
         elif self.provider == "ollama":
             self.llm = ChatOllama(

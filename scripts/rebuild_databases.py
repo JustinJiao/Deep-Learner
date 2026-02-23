@@ -17,7 +17,8 @@ def rebuild():
 
     print("Collections ready.")
 
-    docs_path = "data/docs"
+    docs_path = os.getenv("DOCS_PATH", "data/docs")
+    print(f"Using docs path: {docs_path}")
 
     chunker = SemanticChunker()
     writer = DualWriter()

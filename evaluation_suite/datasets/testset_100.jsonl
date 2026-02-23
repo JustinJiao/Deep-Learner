@@ -1,0 +1,100 @@
+{"id": "q001", "question": "Python 开发中的虚拟环境管理 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q002", "question": "如果我问“Python 开发中的虚拟环境管理”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q003", "question": "venv 建立隔离环境 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q004", "question": "如果我问“venv 建立隔离环境”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q005", "question": "conda 建立隔离环境 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q006", "question": "如果我问“conda 建立隔离环境”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q007", "question": "建议使用 venv 或 conda 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q008", "question": "如果我问“建议使用 venv 或 conda”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q009", "question": "check_environment 函数 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q010", "question": "如果我问“check_environment 函数”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q011", "question": "sys.version 输出 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q012", "question": "如果我问“sys.version 输出”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q013", "question": "sys.prefix 判断虚拟环境 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q014", "question": "如果我问“sys.prefix 判断虚拟环境”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q015", "question": "状态: 正在使用虚拟环境 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q016", "question": "如果我问“状态: 正在使用虚拟环境”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q017", "question": "警告: 未检测到虚拟环境 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q018", "question": "如果我问“警告: 未检测到虚拟环境”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q019", "question": "if __name__ == '__main__' 调用 check_environment 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q020", "question": "如果我问“if __name__ == '__main__' 调用 check_environment”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q021", "question": "Python 代码块示例 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q022", "question": "如果我问“Python 代码块示例”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q023", "question": "导入 os 和 sys 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q024", "question": "如果我问“导入 os 和 sys”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q025", "question": "环境检测脚本 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q026", "question": "如果我问“环境检测脚本”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q027", "question": "虚拟环境隔离实践 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q028", "question": "如果我问“虚拟环境隔离实践”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q029", "question": "Python 版本打印 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q030", "question": "如果我问“Python 版本打印”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q031", "question": "是否在 venv 中的检测条件 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q032", "question": "如果我问“是否在 venv 中的检测条件”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q033", "question": "开发环境隔离建议 这部分信息来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q034", "question": "如果我问“开发环境隔离建议”，应该命中哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_markdown.md。", "ground_truth_docs": ["test_markdown.md"]}
+{"id": "q035", "question": "Transformer 架构中的 Attention 机制 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q036", "question": "关于 Transformer 架构中的 Attention 机制，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q037", "question": "“Transformer 架构中的 Attention 机制” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q038", "question": "缩放点积注意力 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q039", "question": "关于 缩放点积注意力，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q040", "question": "“缩放点积注意力” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q041", "question": "Attention(Q,K,V)=softmax(QK^T/sqrt(d_k))V 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q042", "question": "关于 Attention(Q,K,V)=softmax(QK^T/sqrt(d_k))V，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q043", "question": "“Attention(Q,K,V)=softmax(QK^T/sqrt(d_k))V” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q044", "question": "查询 Query、键 Key、值 Value 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q045", "question": "关于 查询 Query、键 Key、值 Value，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q046", "question": "“查询 Query、键 Key、值 Value” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q047", "question": "多头注意力 Multi Head Attention 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q048", "question": "关于 多头注意力 Multi Head Attention，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q049", "question": "“多头注意力 Multi Head Attention” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q050", "question": "将 Q K V 映射到多个子空间 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q051", "question": "关于 将 Q K V 映射到多个子空间，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q052", "question": "“将 Q K V 映射到多个子空间” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q053", "question": "捕捉长距离依赖关系 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q054", "question": "关于 捕捉长距离依赖关系，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q055", "question": "“捕捉长距离依赖关系” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q056", "question": "长文本处理任务中的对比结论 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q057", "question": "关于 长文本处理任务中的对比结论，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q058", "question": "“长文本处理任务中的对比结论” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q059", "question": "与传统 RNN 架构相比并行能力更强 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q060", "question": "关于 与传统 RNN 架构相比并行能力更强，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q061", "question": "“与传统 RNN 架构相比并行能力更强” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q062", "question": "收敛速度更优 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q063", "question": "关于 收敛速度更优，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q064", "question": "“收敛速度更优” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q065", "question": "卷积核类比解释多头注意力 的说明在哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q066", "question": "关于 卷积核类比解释多头注意力，应检索到哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q067", "question": "“卷积核类比解释多头注意力” 这个知识点来自哪篇内容？", "ground_truth_answer": "该问题对应信息来自文档 test_pdf.pdf。", "ground_truth_docs": ["test_pdf.pdf"]}
+{"id": "q068", "question": "企业级 RAG 架构实施方案 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q069", "question": "如果检索 企业级 RAG 架构实施方案，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q070", "question": "“企业级 RAG 架构实施方案” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q071", "question": "项目目标是提升企业内部文档搜索效率 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q072", "question": "如果检索 项目目标是提升企业内部文档搜索效率，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q073", "question": "“项目目标是提升企业内部文档搜索效率” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q074", "question": "LLM 与私有知识库结合 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q075", "question": "如果检索 LLM 与私有知识库结合，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q076", "question": "“LLM 与私有知识库结合” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q077", "question": "数据层支持 PDF Word PPT 输入 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q078", "question": "如果检索 数据层支持 PDF Word PPT 输入，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q079", "question": "“数据层支持 PDF Word PPT 输入” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q080", "question": "处理层采用 Spark 并行清洗 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q081", "question": "如果检索 处理层采用 Spark 并行清洗，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q082", "question": "“处理层采用 Spark 并行清洗” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q083", "question": "Milvus 存储语义向量 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q084", "question": "如果检索 Milvus 存储语义向量，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q085", "question": "“Milvus 存储语义向量” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q086", "question": "Elasticsearch 存储关键词索引 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q087", "question": "如果检索 Elasticsearch 存储关键词索引，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q088", "question": "“Elasticsearch 存储关键词索引” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q089", "question": "系统必须部署在内网环境 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q090", "question": "如果检索 系统必须部署在内网环境，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q091", "question": "“系统必须部署在内网环境” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q092", "question": "API Key 必须通过环境变量加密存储 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q093", "question": "如果检索 API Key 必须通过环境变量加密存储，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q094", "question": "“API Key 必须通过环境变量加密存储” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q095", "question": "禁止在代码中硬编码敏感信息 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q096", "question": "如果检索 禁止在代码中硬编码敏感信息，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q097", "question": "“禁止在代码中硬编码敏感信息” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q098", "question": "核心技术路径的数据层处理层存储层 这一点来自哪个文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q099", "question": "如果检索 核心技术路径的数据层处理层存储层，应返回哪份资料？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}
+{"id": "q100", "question": "“核心技术路径的数据层处理层存储层” 的内容应该命中哪篇文档？", "ground_truth_answer": "该问题对应信息来自文档 test_word.docx。", "ground_truth_docs": ["test_word.docx"]}

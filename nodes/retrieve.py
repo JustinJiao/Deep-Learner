@@ -5,9 +5,18 @@ from core.state import AgentState, StepLog
 from tools.retrieve_tool.pipeline import RetrievalPipeline
 from nodes.log_utils import clip_text, preview_docs
 
+_PIPELINE: RetrievalPipeline | None = None
+
+
+def _get_pipeline() -> RetrievalPipeline:
+    global _PIPELINE
+    if _PIPELINE is None:
+        _PIPELINE = RetrievalPipeline()
+    return _PIPELINE
+
 
 def retrieve_node(state: AgentState) -> AgentState:
-    pipeline = RetrievalPipeline()
+    pipeline = _get_pipeline()
     query = state.get("rewritten_query") or state["query"]
 
     results = pipeline.run(query)
