@@ -11,8 +11,23 @@ class AppConfig:
 
     # === 记忆与修复控制 ===
     MAX_REPAIR_LOOPS = int(os.getenv("MAX_REPAIR_LOOPS", 3))
+    # Runtime V2 作为默认执行路径；如需紧急回退可显式设置为 false
+    RUNTIME_V2_ENABLED = env_bool("RUNTIME_V2_ENABLED", True)
+    RUNTIME_MAX_TRANSITIONS = int(os.getenv("RUNTIME_MAX_TRANSITIONS", 12))
+    RUNTIME_ENFORCE_CONTRACT = env_bool("RUNTIME_ENFORCE_CONTRACT", True)
+    # Compose/Verify 的上下文裁剪，避免大上下文导致延迟放大
+    RUNTIME_COMPOSE_CONTEXT_TOP_K = int(os.getenv("RUNTIME_COMPOSE_CONTEXT_TOP_K", 8))
+    RUNTIME_VERIFY_CONTEXT_TOP_K = int(os.getenv("RUNTIME_VERIFY_CONTEXT_TOP_K", 8))
+    # Verify 统一评分阈值（评分主导，verdict 由分数映射）
+    VERIFY_PASS_SCORE_THRESHOLD = float(os.getenv("VERIFY_PASS_SCORE_THRESHOLD", "0.68"))
+    STRICT_VERIFY_PASS_SCORE_THRESHOLD = float(os.getenv("STRICT_VERIFY_PASS_SCORE_THRESHOLD", "0.75"))
+    MEMORY_SUFFICIENT_SCORE_THRESHOLD = float(os.getenv("MEMORY_SUFFICIENT_SCORE_THRESHOLD", "0.70"))
+    # 当已有检索证据时，禁止 compose 直接输出“不确定”
+    RUNTIME_FORCE_ANSWER_ON_EVIDENCE = env_bool("RUNTIME_FORCE_ANSWER_ON_EVIDENCE", True)
+    # repair 阶段失败后，优先转为抽取式回答以降低逻辑扩写错误
+    RUNTIME_REPAIR_EXTRACTIVE_FALLBACK = env_bool("RUNTIME_REPAIR_EXTRACTIVE_FALLBACK", True)
 
-        # Steps log 截断，避免长会话膨胀
+    # Steps log 截断，避免长会话膨胀
     MAX_STEPS_LOG = int(os.getenv("MAX_STEPS_LOG", 200))
 
 # === 1. 基础设施地址 ===

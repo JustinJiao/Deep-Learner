@@ -5,3 +5,9 @@ from llm.prompts.compose import ComposePrompt
 from llm.prompts.verify import VerifyPrompt
 from llm.prompts.stm_compress import STMCompressPrompt
 from llm.prompts.ltm_fact_extract import LTMFactExtractPrompt
+from llm.prompts.compose_memory_draft import ComposeMemoryDraftPrompt
+from llm.prompts.verify_memory import VerifyMemoryPrompt
+from llm.prompts.compose_with_context import ComposeWithContextPrompt
+from llm.prompts.strict_verify import StrictVerifyPrompt
+from llm.prompts.resolve_query_reference import ResolveQueryReferencePrompt
+from llm.prompts.rewrite_retrieval_query import RewriteRetrievalQueryPrompt

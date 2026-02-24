@@ -10,7 +10,8 @@ _PIPELINE: RetrievalPipeline | None = None
 
 def _get_pipeline() -> RetrievalPipeline:
     global _PIPELINE
-    if _PIPELINE is None:
+    # 测试中 monkeypatch RetrievalPipeline 时，避免复用旧实例导致跨用例污染
+    if _PIPELINE is None or not isinstance(_PIPELINE, RetrievalPipeline):
         _PIPELINE = RetrievalPipeline()
     return _PIPELINE
 

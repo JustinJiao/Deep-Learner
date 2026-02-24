@@ -18,3 +18,15 @@ class MaxLoopExceededError(AgentError):
 
 class UnknownNodeError(AgentError):
     """Plan 中出现未注册节点"""
+
+
+class InvalidStateTransitionError(AgentError):
+    """Runtime 状态机发生非法转移"""
+
+
+class RuntimeMaxTransitionExceededError(AgentError):
+    """Runtime 状态转移次数超过上限"""
+
+
+class NodeContractViolationError(AgentError):
+    """节点读写契约违反"""
