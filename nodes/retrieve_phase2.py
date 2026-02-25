@@ -57,8 +57,11 @@ def retrieve_phase2_node(state: AgentState) -> AgentState:
     retrieval_query = str(
         state.get("retrieval_query") or state.get("resolved_query") or original_query
     ).strip()
-    vector_hits = _get_vector_retriever().search(retrieval_query, top_k=80)
-    keyword_hits = _get_keyword_retriever().search(retrieval_query, top_k=80)
+    vector_top_k = int(getattr(AppConfig, "PHASE2_VECTOR_TOP_K", 80))
+    keyword_top_k = int(getattr(AppConfig, "PHASE2_KEYWORD_TOP_K", 80))
+
+    vector_hits = _get_vector_retriever().search(retrieval_query, top_k=vector_top_k)
+    keyword_hits = _get_keyword_retriever().search(retrieval_query, top_k=keyword_top_k)
     merged = _rrf_fusion(vector_hits, keyword_hits)
 
     phase2_candidates: list[dict] = []
@@ -89,8 +92,8 @@ def retrieve_phase2_node(state: AgentState) -> AgentState:
                     "used_rewritten_query": retrieval_query != original_query,
                 },
                 "memory": {
-                    "vector_top_k": 80,
-                    "keyword_top_k": 80,
+                    "vector_top_k": vector_top_k,
+                    "keyword_top_k": keyword_top_k,
                     "vector_hits": len(vector_hits),
                     "keyword_hits": len(keyword_hits),
                     "merged_count": len(phase2_candidates),

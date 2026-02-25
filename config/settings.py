@@ -66,6 +66,13 @@ class AppConfig:
     RRF_K = int(os.getenv("RRF_K", 60))
     RECALL_TOP_K = int(os.getenv("RECALL_TOP_K", 50))
     FINAL_TOP_K = int(os.getenv("FINAL_TOP_K", 5))
+    # Runtime V2: 两阶段检索参数
+    PHASE1_VECTOR_TOP_K = int(os.getenv("PHASE1_VECTOR_TOP_K", 30))
+    PHASE1_KEYWORD_TOP_K = int(os.getenv("PHASE1_KEYWORD_TOP_K", 30))
+    PHASE1_RERANK_TOP_N = int(os.getenv("PHASE1_RERANK_TOP_N", 20))
+    PHASE2_VECTOR_TOP_K = int(os.getenv("PHASE2_VECTOR_TOP_K", 80))
+    PHASE2_KEYWORD_TOP_K = int(os.getenv("PHASE2_KEYWORD_TOP_K", 80))
+    PHASE2_RERANK_TOP_N = int(os.getenv("PHASE2_RERANK_TOP_N", 40))
     # 质量门控（Rerank 后生效）
     RETRIEVAL_SCORE_GATE_ENABLED = env_bool(
         "RETRIEVAL_SCORE_GATE_ENABLED", True
@@ -94,8 +101,10 @@ class AppConfig:
     MEMORY_N_CHUNK = int(os.getenv("MEMORY_N_CHUNK", 5))
     MEMORY_K_BUFFER = int(os.getenv("MEMORY_K_BUFFER", 3))
 
-    # config/settings.py
-    CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 50))
+    # chunk overlap 以“行”为单位；兼容旧变量 CHUNK_OVERLAP_LINES
+    CHUNK_OVERLAP = int(
+        os.getenv("CHUNK_OVERLAP", os.getenv("CHUNK_OVERLAP_LINES", 50))
+    )
     
     STM_COMPRESS_INTERVAL = int(os.getenv("STM_COMPRESS_INTERVAL", 5))
     STM_RECENT_WINDOW = int(os.getenv("STM_RECENT_WINDOW", 3))

@@ -1,5 +1,6 @@
 import time
 
+from config.settings import AppConfig
 from core.state import AgentState, StepLog
 from nodes.log_utils import clip_text, preview_docs
 from tools.retrieve_tool.base import SearchResult
@@ -73,8 +74,9 @@ def _to_trace_docs(docs: list[dict]) -> list[dict]:
 
 
 def rerank_phase1_node(state: AgentState) -> AgentState:
-    query = state.get("query", "")
-    candidates = state.get("phase1_candidates", [])[:20]
+    query = state.get("retrieval_query") or state.get("query", "")
+    rerank_top_n = max(1, int(getattr(AppConfig, "PHASE1_RERANK_TOP_N", 20)))
+    candidates = state.get("phase1_candidates", [])[:rerank_top_n]
     reranker = _get_reranker()
 
     if reranker is None:
@@ -82,7 +84,9 @@ def rerank_phase1_node(state: AgentState) -> AgentState:
         rerank_enabled = False
     else:
         input_results = _to_search_results(candidates)
-        reranked = reranker.rerank(query, input_results, top_n=min(20, len(input_results)))
+        reranked = reranker.rerank(
+            query, input_results, top_n=min(rerank_top_n, len(input_results))
+        )
         reranked_docs = _to_context_docs(reranked)
         rerank_enabled = True
 
@@ -100,6 +104,7 @@ def rerank_phase1_node(state: AgentState) -> AgentState:
                     "query_preview": clip_text(query, 180),
                 },
                 "memory": {
+                    "rerank_top_n": rerank_top_n,
                     "rerank_input_count": len(candidates),
                     "rerank_output_count": len(reranked_docs),
                     "rerank_enabled": rerank_enabled,
