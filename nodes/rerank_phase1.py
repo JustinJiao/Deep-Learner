@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 from config.settings import AppConfig
 from core.state import AgentState, StepLog
@@ -73,9 +74,101 @@ def _to_trace_docs(docs: list[dict]) -> list[dict]:
     return traced
 
 
+def _extract_source_name(doc: dict) -> str:
+    metadata = doc.get("metadata", {}) or {}
+    source_raw = (
+        metadata.get("source")
+        or doc.get("title")
+        or doc.get("id")
+        or "Unknown Document"
+    )
+    source_text = str(source_raw).strip()
+    return Path(source_text).name or source_text or "Unknown Document"
+
+
+def _coverage_window_top_k() -> int:
+    configured = int(AppConfig.RETRIEVAL_SOURCE_COVERAGE_WINDOW_TOP_K)
+    if configured > 0:
+        return configured
+    compose_top_k = int(AppConfig.RUNTIME_COMPOSE_CONTEXT_TOP_K)
+    return compose_top_k if compose_top_k > 0 else 1
+
+
+def _dedupe_docs_by_id(docs: list[dict]) -> list[dict]:
+    seen: set[str] = set()
+    out: list[dict] = []
+    for doc in docs:
+        doc_id = str(doc.get("id", "")).strip()
+        if not doc_id:
+            continue
+        if doc_id in seen:
+            continue
+        seen.add(doc_id)
+        out.append(doc)
+    return out
+
+
+def _enforce_source_coverage(
+    ranked_docs: list[dict],
+    candidates: list[dict],
+) -> tuple[list[dict], int]:
+    if not bool(AppConfig.RETRIEVAL_ENFORCE_SOURCE_COVERAGE):
+        return ranked_docs, 0
+
+    min_coverage = int(AppConfig.RETRIEVAL_MIN_SOURCE_COVERAGE)
+    if min_coverage <= 0:
+        return ranked_docs, 0
+
+    augmented = _dedupe_docs_by_id(list(ranked_docs))
+    if not augmented:
+        return augmented, 0
+
+    window_k = max(1, min(_coverage_window_top_k(), len(augmented)))
+    window_sources = {_extract_source_name(doc) for doc in augmented[:window_k]}
+    if len(window_sources) >= min_coverage:
+        return augmented, 0
+
+    source_representative: dict[str, dict] = {}
+    for doc in augmented:
+        source = _extract_source_name(doc)
+        source_representative.setdefault(source, doc)
+    for cand in candidates:
+        source = _extract_source_name(cand)
+        source_representative.setdefault(source, cand)
+
+    max_possible = min(min_coverage, len(source_representative))
+    if len(window_sources) >= max_possible:
+        return augmented, 0
+
+    supplemental: list[dict] = []
+    for source, rep in source_representative.items():
+        if source in window_sources:
+            continue
+        supplemental.append(rep)
+        if len(window_sources) + len(supplemental) >= max_possible:
+            break
+
+    added = 0
+    insert_at = 1
+    for cand in supplemental:
+        cand_id = str(cand.get("id", "")).strip()
+        if cand_id:
+            augmented = [d for d in augmented if str(d.get("id", "")).strip() != cand_id]
+        pos = min(insert_at, len(augmented))
+        augmented.insert(pos, cand)
+        insert_at += 1
+        added += 1
+        window_k = max(1, min(_coverage_window_top_k(), len(augmented)))
+        window_sources = {_extract_source_name(doc) for doc in augmented[:window_k]}
+        if len(window_sources) >= max_possible:
+            break
+
+    return _dedupe_docs_by_id(augmented), added
+
+
 def rerank_phase1_node(state: AgentState) -> AgentState:
     query = state.get("retrieval_query") or state.get("query", "")
-    rerank_top_n = max(1, int(getattr(AppConfig, "PHASE1_RERANK_TOP_N", 20)))
+    rerank_top_n = max(1, int(AppConfig.PHASE1_RERANK_TOP_N))
     candidates = state.get("phase1_candidates", [])[:rerank_top_n]
     reranker = _get_reranker()
 
@@ -89,6 +182,12 @@ def rerank_phase1_node(state: AgentState) -> AgentState:
         )
         reranked_docs = _to_context_docs(reranked)
         rerank_enabled = True
+
+    reranked_docs, source_coverage_added = _enforce_source_coverage(
+        ranked_docs=reranked_docs,
+        candidates=candidates,
+    )
+    source_coverage_count = len({_extract_source_name(doc) for doc in reranked_docs})
 
     state["phase1_reranked"] = _to_trace_docs(reranked_docs)
     state["context_pool"] = reranked_docs
@@ -108,6 +207,8 @@ def rerank_phase1_node(state: AgentState) -> AgentState:
                     "rerank_input_count": len(candidates),
                     "rerank_output_count": len(reranked_docs),
                     "rerank_enabled": rerank_enabled,
+                    "source_coverage_count": source_coverage_count,
+                    "source_coverage_added": source_coverage_added,
                     "context_pool_preview": preview_docs(reranked_docs),
                 },
             },

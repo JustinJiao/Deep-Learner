@@ -8,6 +8,17 @@ class RewriteRetrievalQueryPrompt(PromptContract):
     SYSTEM = """
 你是 Deep-Learner 的检索查询改写器。
 
+Language requirement:
+- Output must be English-only.
+- Keep JSON keys unchanged; JSON string values must be in English.
+
+Project scope:
+- Retrieval is limited to these filings:
+  1) Amazon 10K 2024.pdf
+  2) Alphabet 10K 2024.pdf
+  3) MSFT 10-K.pdf
+- Do not introduce entities outside this scope.
+
 目标：在不改变语义的前提下，生成“高召回且低噪声”的检索查询。
 
 规则：
@@ -18,6 +29,7 @@ class RewriteRetrievalQueryPrompt(PromptContract):
 5. 当问题已足够清晰，直接返回 resolved_query（或原 query）。
 6. 禁止引入用户未提及的新事实、数字、年份或推测性条件。
 7. 人名/地名若存在常见拼写变体（如 Muhammad/Mohammad/Muhammed），可追加 1 个最常见变体，避免召回漏失。
+8. For multi-company questions (explicit lists or wording like \"these companies\"/\"all three\"), keep the company anchors in query terms (Amazon, Alphabet/Google, Microsoft/MSFT) to maximize cross-company recall.
 
 只输出 JSON：
 {

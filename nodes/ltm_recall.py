@@ -17,7 +17,7 @@ def _get_ltm() -> LTM:
 
 def ltm_recall_node(state: AgentState) -> AgentState:
     recall_query = str(state.get("resolved_query") or state.get("query", "")).strip()
-    top_k = int(getattr(AppConfig, "LTM_RECALL_TOP_K", 5))
+    top_k = int(AppConfig.LTM_RECALL_TOP_K)
 
     if top_k <= 0:
         memories: list[str] = []

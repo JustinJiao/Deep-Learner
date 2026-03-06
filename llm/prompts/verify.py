@@ -10,6 +10,17 @@ class VerifyPrompt(PromptContract):
 
     SYSTEM = """
     检查回答是否基于检索文档。
+    Language requirement:
+    - Output must be English-only.
+    - Keep JSON keys unchanged; JSON string values must be in English.
+
+    Project scope:
+    - Validate only against these filings:
+      1) Amazon 10K 2024.pdf
+      2) Alphabet 10K 2024.pdf
+      3) MSFT 10-K.pdf
+    - Claims outside these filings should be treated as unsupported.
+
     如果有问题，请分类错误类型：
     - generation_error
     - retrieval_insufficient

@@ -1,5 +1,6 @@
 import time
 from typing import Dict
+from pathlib import Path
 
 from config.settings import AppConfig
 from core.state import AgentState, StepLog
@@ -30,7 +31,7 @@ def _rrf_fusion(
     v_results: list[SearchResult],
     k_results: list[SearchResult],
 ) -> list[SearchResult]:
-    rrf_k = int(getattr(AppConfig, "RRF_K", 60))
+    rrf_k = int(AppConfig.RRF_K)
     rrf_scores: Dict[str, float] = {}
     doc_map: Dict[str, SearchResult] = {}
 
@@ -52,16 +53,43 @@ def _rrf_fusion(
     return merged
 
 
+def _source_name_from_result(res: SearchResult) -> str:
+    metadata = res.metadata if isinstance(res.metadata, dict) else {}
+    source_raw = (
+        metadata.get("source")
+        or metadata.get("title")
+        or res.source_type
+        or res.id
+        or "Unknown Document"
+    )
+    source_text = str(source_raw).strip()
+    return (Path(source_text).name or source_text or "Unknown Document").lower()
+
+
+def _filter_allowed_sources(results: list[SearchResult]) -> tuple[list[SearchResult], int]:
+    if not bool(AppConfig.RETRIEVAL_RESTRICT_TO_ALLOWED_SOURCES):
+        return results, 0
+    allowed = set(AppConfig.RETRIEVAL_ALLOWED_SOURCES)
+    if not allowed:
+        return results, 0
+
+    filtered = [r for r in results if _source_name_from_result(r) in allowed]
+    removed = max(0, len(results) - len(filtered))
+    return filtered, removed
+
+
 def retrieve_phase2_node(state: AgentState) -> AgentState:
     original_query = str(state.get("query", "")).strip()
     retrieval_query = str(
         state.get("retrieval_query") or state.get("resolved_query") or original_query
     ).strip()
-    vector_top_k = int(getattr(AppConfig, "PHASE2_VECTOR_TOP_K", 80))
-    keyword_top_k = int(getattr(AppConfig, "PHASE2_KEYWORD_TOP_K", 80))
+    vector_top_k = int(AppConfig.PHASE2_VECTOR_TOP_K)
+    keyword_top_k = int(AppConfig.PHASE2_KEYWORD_TOP_K)
 
-    vector_hits = _get_vector_retriever().search(retrieval_query, top_k=vector_top_k)
-    keyword_hits = _get_keyword_retriever().search(retrieval_query, top_k=keyword_top_k)
+    raw_vector_hits = _get_vector_retriever().search(retrieval_query, top_k=vector_top_k)
+    raw_keyword_hits = _get_keyword_retriever().search(retrieval_query, top_k=keyword_top_k)
+    vector_hits, vector_filtered_out = _filter_allowed_sources(raw_vector_hits)
+    keyword_hits, keyword_filtered_out = _filter_allowed_sources(raw_keyword_hits)
     merged = _rrf_fusion(vector_hits, keyword_hits)
 
     phase2_candidates: list[dict] = []
@@ -94,8 +122,12 @@ def retrieve_phase2_node(state: AgentState) -> AgentState:
                 "memory": {
                     "vector_top_k": vector_top_k,
                     "keyword_top_k": keyword_top_k,
+                    "vector_hits_raw": len(raw_vector_hits),
+                    "keyword_hits_raw": len(raw_keyword_hits),
                     "vector_hits": len(vector_hits),
                     "keyword_hits": len(keyword_hits),
+                    "vector_filtered_out": vector_filtered_out,
+                    "keyword_filtered_out": keyword_filtered_out,
                     "merged_count": len(phase2_candidates),
                     "candidate_preview": preview_docs(phase2_candidates),
                 },

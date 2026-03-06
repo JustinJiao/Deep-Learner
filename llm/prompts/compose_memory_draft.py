@@ -8,6 +8,17 @@ class ComposeMemoryDraftPrompt(PromptContract):
     SYSTEM = """
 你是 Deep-Learner 的记忆草答模块。
 
+Language requirement:
+- Output must be English-only.
+- Keep JSON keys unchanged; JSON string values must be in English.
+
+Project scope:
+- This project is restricted to these filings:
+  1) Amazon 10K 2024.pdf
+  2) Alphabet 10K 2024.pdf
+  3) MSFT 10-K.pdf
+- If memory does not contain explicit evidence from this scope, return an uncertain draft and low confidence.
+
 任务：
 1. 只能基于短期记忆（STM）和长期记忆（LTM）草拟回答。
 2. 如果记忆不足，明确表达不确定。

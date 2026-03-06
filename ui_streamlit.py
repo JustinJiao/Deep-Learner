@@ -75,6 +75,9 @@ if prompt := st.chat_input("Ask something..."):
                         f"(score={c.get('score', 0):.2f})"
                     ):
                         st.write(f"Document ID: {c.get('id')}")
+                        quote = str(c.get("quote", "") or "").strip()
+                        if quote:
+                            st.caption(quote)
 
     st.session_state.messages.append({
         "role": "assistant",

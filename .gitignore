@@ -4,6 +4,7 @@
 .env
 *.env
 .env.*
+!.env.example
 .envrc
 
 # ==========================================
@@ -84,3 +85,11 @@ database/
 interface/.chainlit/
 interface/.files/
 .chainlit/
+
+# ==========================================
+# 8. Evaluation Artifacts (Do Not Commit)
+# ==========================================
+AI-Essential/
+
+evaluation_suite/datasets/testset_10k_*.jsonl
+!evaluation_suite/datasets/testset_10k_3cats_60.jsonl

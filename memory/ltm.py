@@ -63,8 +63,8 @@ class LTM:
             data=[vector],
             anns_field="vector",
             param={
-                "metric_type": "COSINE",
-                "params": {"ef": 64},
+                "metric_type": AppConfig.MILVUS_LTM_SEARCH_METRIC_TYPE,
+                "params": {"ef": AppConfig.MILVUS_LTM_SEARCH_EF},
             },
             limit=limit,
             output_fields=["content"],

@@ -83,8 +83,14 @@ class AgentState(TypedDict, total=False):
     verified_revision: int
     verify_score: float
     strict_score: float
+    strict_total_score: float
     memory_score: float
     strict_verdict: Literal["PASS", "FAIL"]
+    strict_action: Literal["PASS", "REPAIR"]
+    strict_status: Literal["PASS", "REPAIRED", "FAILED"]
+    strict_metrics: Dict[str, Any]
+    strict_confidence: float
+    repair_trigger: str
     failure_type: StrictFailureType
     strict_reason: str
     ltm_hits_count: int
@@ -130,7 +136,13 @@ def build_initial_state(session_id: str, query: str) -> AgentState:
         "verified_revision": 0,
         "verify_score": 0.0,
         "strict_score": 0.0,
+        "strict_total_score": 0.0,
         "memory_score": 0.0,
+        "strict_action": "PASS",
+        "strict_status": "PASS",
+        "strict_metrics": {},
+        "strict_confidence": 0.0,
+        "repair_trigger": "",
         "citations": [],
         "repair_reason": "",
     }

@@ -14,6 +14,14 @@ class STMCompressPrompt(PromptContract):
 要求：
 - 必须保留可被问答检索的关键信息（如：用户偏好、地点、年龄、计划、结论、定义）。
 - 不要编造，不要引入对话中没有的信息。
+- Language requirement:
+  - Output must be English-only.
+  - Keep JSON keys unchanged; JSON string values must be in English.
+- Project scope:
+  - The conversation domain is limited to these filings:
+    1) Amazon 10K 2024.pdf
+    2) Alphabet 10K 2024.pdf
+    3) MSFT 10-K.pdf
 - 输出必须是 JSON，格式：
 {"stm_compressed_text": "..."}
 """.strip()

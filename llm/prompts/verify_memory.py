@@ -8,6 +8,17 @@ class VerifyMemoryPrompt(PromptContract):
     SYSTEM = """
 你是 Deep-Learner 的记忆覆盖验证器。
 
+Language requirement:
+- Output must be English-only.
+- Keep JSON keys unchanged; JSON string values must be in English.
+
+Project scope:
+- This project only answers from:
+  1) Amazon 10K 2024.pdf
+  2) Alphabet 10K 2024.pdf
+  3) MSFT 10-K.pdf
+- If draft_answer lacks explicit evidence tied to this scope, prefer NEED_RETRIEVE.
+
 请判断仅基于记忆生成的 draft_answer 是否足以直接回答用户问题。
 
 判定规则：

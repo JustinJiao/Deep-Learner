@@ -1,5 +1,6 @@
 import time
 
+from config.settings import AppConfig
 from core.llm_call import run_prompt
 from core.state import AgentState, StepLog
 from llm.prompts.rewrite_retrieval_query import RewriteRetrievalQueryPrompt
@@ -9,6 +10,27 @@ from nodes.log_utils import clip_text, preview_messages
 
 def _base_query(state: AgentState) -> str:
     return str(state.get("resolved_query") or state.get("query") or "").strip()
+
+
+_MULTI_COMPANY_MARKERS = (
+    "all three companies",
+    "all three",
+    "all companies",
+    "these companies",
+    "three companies",
+)
+
+_COMPANY_TERMS = ("amazon", "microsoft", "msft", "alphabet", "google")
+
+
+def _needs_multi_company_expansion(base_query: str, retrieval_query: str) -> bool:
+    base = str(base_query or "").lower()
+    rewritten = str(retrieval_query or "").lower()
+    if not any(marker in base for marker in _MULTI_COMPANY_MARKERS):
+        return False
+    if any(term in rewritten for term in _COMPANY_TERMS):
+        return False
+    return True
 
 
 def rewrite_query_for_retrieval_node(state: AgentState) -> AgentState:
@@ -29,6 +51,12 @@ def rewrite_query_for_retrieval_node(state: AgentState) -> AgentState:
     if not retrieval_query:
         retrieval_query = base_query
         used_fallback = True
+
+    if bool(AppConfig.RETRIEVAL_EXPAND_GENERIC_MULTI_COMPANY) and _needs_multi_company_expansion(
+        base_query=base_query,
+        retrieval_query=retrieval_query,
+    ):
+        retrieval_query = f"{retrieval_query} Amazon Microsoft Alphabet Google".strip()
 
     state["retrieval_query"] = retrieval_query
 

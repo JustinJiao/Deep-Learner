@@ -36,7 +36,7 @@ ALLOWED_TRANSITIONS: dict[RuntimeStage, set[RuntimeStage]] = {
 def _append_log(state: AgentState, log: StepLog) -> None:
     logs = state.setdefault("steps_log", [])
     logs.append(log)
-    cap = int(getattr(AppConfig, "MAX_STEPS_LOG", 200))
+    cap = int(AppConfig.MAX_STEPS_LOG)
     if cap > 0 and len(logs) > cap:
         state["steps_log"] = logs[-cap:]
 
@@ -55,7 +55,7 @@ def _assert_forward_only(from_stage: RuntimeStage, to_stage: RuntimeStage) -> No
 
 
 def _assert_not_exceed_max_transitions(state: AgentState) -> None:
-    max_transitions = int(getattr(AppConfig, "RUNTIME_MAX_TRANSITIONS", 12))
+    max_transitions = int(AppConfig.RUNTIME_MAX_TRANSITIONS)
     if state.get("transition_count", 0) > max_transitions:
         raise RuntimeMaxTransitionExceededError(
             f"runtime transition count exceeded: {state.get('transition_count', 0)} > {max_transitions}"
@@ -102,7 +102,7 @@ class AgentExecutor:
 
     def run(self, session_id: str, query: str) -> AgentState:
         state = build_initial_state(session_id=session_id, query=query)
-        if getattr(AppConfig, "RUNTIME_V2_ENABLED", False):
+        if AppConfig.RUNTIME_V2_ENABLED:
             return self._run_v2_state_machine(state)
         return self._run_legacy_flow(state)
 
@@ -114,7 +114,7 @@ class AgentExecutor:
         before_state = copy.deepcopy(state)
         out = node_fn(state)
 
-        if getattr(AppConfig, "RUNTIME_ENFORCE_CONTRACT", True):
+        if AppConfig.RUNTIME_ENFORCE_CONTRACT:
             report = validate_node_contract(
                 node_name=node_name,
                 before_state=before_state,
@@ -193,13 +193,19 @@ class AgentExecutor:
             state = self._execute_node(state, "compose_memory_draft")
             state = self._execute_node(state, "verify_memory")
 
-            if state.get("memory_verdict") == "SUFFICIENT":
+            memory_sufficient = state.get("memory_verdict") == "SUFFICIENT"
+            force_retrieve = bool(AppConfig.RUNTIME_FORCE_RETRIEVE_WHEN_MEMORY_SUFFICIENT)
+
+            if memory_sufficient and not force_retrieve:
                 state["response"] = state.get("draft_answer", "")
                 state.setdefault("citations", [])
                 state["run_status"] = "ok"
                 _transition(state, "FINALIZE", reason="memory_verdict_sufficient")
             else:
-                _transition(state, "PHASE1", reason="memory_verdict_need_retrieve")
+                phase1_reason = "memory_verdict_need_retrieve"
+                if memory_sufficient and force_retrieve:
+                    phase1_reason = "memory_verdict_sufficient_but_force_retrieve"
+                _transition(state, "PHASE1", reason=phase1_reason)
                 state = self._execute_node(state, "rewrite_query_for_retrieval")
                 state = self._execute_node(state, "retrieve_phase1")
                 state = self._execute_node(state, "rerank_phase1")
@@ -209,65 +215,90 @@ class AgentExecutor:
                 state = self._execute_node(state, "compose_with_context")
                 state = self._execute_node(state, "strict_verify")
 
-                if state.get("strict_verdict") == "PASS":
+                strict_action = str(state.get("strict_action", "PASS")).upper()
+                if strict_action == "PASS":
                     state["run_status"] = "ok"
+                    state["strict_status"] = "PASS"
                     _transition(state, "FINALIZE", reason="strict_verify_pass")
                 else:
                     failure_type = state.get("failure_type", "")
-
-                    if failure_type == "INSUFFICIENT_EVIDENCE" and not state.get("phase2_used", False):
+                    if (
+                        str(failure_type).upper() == "INSUFFICIENT_EVIDENCE"
+                        and not bool(state.get("phase2_used", False))
+                    ):
                         _guard_phase2_once(state)
                         state["phase2_used"] = True
-                        _transition(state, "PHASE2", reason="phase1_fail_insufficient_evidence")
-                        state["repair_mode"] = False
-                        state = self._execute_node(state, "retrieve_phase2")
-                        state = self._execute_node(state, "rerank_phase2")
-                        state.setdefault("previous_response", state.get("response", ""))
-                        state = self._execute_node(state, "compose_with_context")
-                        state = self._execute_node(state, "strict_verify")
-
-                        if state.get("strict_verdict") == "PASS":
-                            state["run_status"] = "ok"
-                            _transition(state, "FINALIZE", reason="strict_verify_pass_after_phase2")
-                        else:
-                            _transition(
-                                state,
-                                "DEGRADE",
-                                reason=f"strict_verify_fail_after_phase2:{state.get('failure_type', '')}",
-                            )
-                            state = self._execute_node(state, "degrade_or_abstain")
-                            _transition(state, "FINALIZE", reason="degrade_after_phase2_fail")
-
-                    elif (
-                        failure_type in {"LOGICAL_ERROR", "CITATION_MISMATCH", "FORMAT_ERROR"}
-                        and not state.get("repair_used", False)
-                    ):
-                        _guard_repair_once(state)
-                        _transition(state, "REPAIR", reason=f"phase1_fail_{failure_type.lower()}")
-                        state = self._execute_node(state, "set_repair_mode")
-                        state.setdefault("previous_response", state.get("response", ""))
-                        state = self._execute_node(state, "compose_with_context")
-                        state = self._execute_node(state, "strict_verify")
-
-                        if state.get("strict_verdict") == "PASS":
-                            state["run_status"] = "ok"
-                            _transition(state, "FINALIZE", reason="strict_verify_pass_after_repair")
-                        else:
-                            _transition(
-                                state,
-                                "DEGRADE",
-                                reason=f"strict_verify_fail_after_repair:{state.get('failure_type', '')}",
-                            )
-                            state = self._execute_node(state, "degrade_or_abstain")
-                            _transition(state, "FINALIZE", reason="degrade_after_repair_fail")
-                    else:
                         _transition(
                             state,
-                            "DEGRADE",
-                            reason=f"strict_verify_fail_unrecoverable:{failure_type}",
+                            "PHASE2",
+                            reason=f"phase1_fail_expand_retrieval_{state.get('repair_trigger', '') or 'insufficient_evidence'}",
                         )
-                        state = self._execute_node(state, "degrade_or_abstain")
-                        _transition(state, "FINALIZE", reason="degrade_after_unrecoverable_fail")
+                        state = self._execute_node(state, "retrieve_phase2")
+                        state = self._execute_node(state, "rerank_phase2")
+                        state.setdefault("repair_mode", False)
+                        state.setdefault("strict_reason", "")
+                        state.setdefault("previous_response", state.get("response", ""))
+                        state = self._execute_node(state, "compose_with_context")
+                        state = self._execute_node(state, "strict_verify")
+                        strict_action = str(state.get("strict_action", "PASS")).upper()
+                        failure_type = state.get("failure_type", "")
+
+                        if strict_action == "PASS":
+                            state["run_status"] = "ok"
+                            state["strict_status"] = "PASS"
+                            _transition(state, "FINALIZE", reason="strict_verify_pass_after_phase2")
+
+                    if (
+                        strict_action != "PASS"
+                        and str(failure_type).upper() == "INSUFFICIENT_EVIDENCE"
+                        and bool(state.get("phase2_used", False))
+                    ):
+                        # phase2 expanded retrieval already attempted; return partial answer
+                        # with explicit missing-evidence notice instead of degrading.
+                        state["run_status"] = "ok"
+                        state["strict_status"] = "FAILED"
+                        _transition(
+                            state,
+                            "FINALIZE",
+                            reason="insufficient_evidence_after_phase2_return_partial",
+                        )
+                    elif not state.get("repair_used", False):
+                        if strict_action != "PASS":
+                            _guard_repair_once(state)
+                            _transition(
+                                state,
+                                "REPAIR",
+                                reason=f"phase1_fail_{state.get('repair_trigger', '') or str(failure_type).lower()}",
+                            )
+                            state = self._execute_node(state, "set_repair_mode")
+                            state.setdefault("previous_response", state.get("response", ""))
+                            state = self._execute_node(state, "compose_with_context")
+                            state = self._execute_node(state, "strict_verify")
+                            strict_action = str(state.get("strict_action", "PASS")).upper()
+
+                            if strict_action == "PASS":
+                                state["run_status"] = "ok"
+                                state["strict_status"] = "REPAIRED"
+                                _transition(state, "FINALIZE", reason="strict_verify_pass_after_repair")
+                            else:
+                                state["strict_status"] = "FAILED"
+                                _transition(
+                                    state,
+                                    "DEGRADE",
+                                    reason=f"strict_verify_fail_after_repair:{state.get('failure_type', '')}",
+                                )
+                                state = self._execute_node(state, "degrade_or_abstain")
+                                _transition(state, "FINALIZE", reason="degrade_after_repair_fail")
+                    else:
+                        if strict_action != "PASS":
+                            state["strict_status"] = "FAILED"
+                            _transition(
+                                state,
+                                "DEGRADE",
+                                reason=f"strict_verify_fail_unrecoverable:{failure_type}",
+                            )
+                            state = self._execute_node(state, "degrade_or_abstain")
+                            _transition(state, "FINALIZE", reason="degrade_after_unrecoverable_fail")
         except Exception as e:
             state["run_status"] = "error"
             state["error"] = {"type": type(e).__name__, "message": str(e)}

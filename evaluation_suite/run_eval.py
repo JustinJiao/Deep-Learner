@@ -805,7 +805,7 @@ def run_all(
         "query_count": len(records),
         "k_values": k_values,
         "isolate_ltm": isolate_ltm,
-        "runtime_v2_enabled": bool(getattr(AppConfig, "RUNTIME_V2_ENABLED", False)),
+        "runtime_v2_enabled": bool(AppConfig.RUNTIME_V2_ENABLED),
         "fast_executor": fast_executor,
         "per_query_timeout_seconds": 0 if per_query_timeout_seconds is None else int(per_query_timeout_seconds),
         "ragas_enabled": bool(enable_ragas),

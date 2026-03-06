@@ -1,6 +1,7 @@
 from typing import List
 from tools.retrieve_tool.base import BaseRetriever, SearchResult
 from config.factory import ResourceFactory
+from config.settings import AppConfig
 
 class VectorRetriever(BaseRetriever):
     def __init__(self, collection=None, embedding_service=None):
@@ -13,7 +14,10 @@ class VectorRetriever(BaseRetriever):
         # 调用解耦后的 embed_query 方法
         query_vector = self.embedding_service.embed_query(query)
         
-        search_params = {"metric_type": "COSINE", "params": {"nprobe": 10}}
+        search_params = {
+            "metric_type": AppConfig.MILVUS_SEARCH_METRIC_TYPE,
+            "params": {"nprobe": AppConfig.MILVUS_SEARCH_NPROBE},
+        }
         results = self.collection.search(
             data=[query_vector],
             anns_field="vector",

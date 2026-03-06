@@ -1,5 +1,6 @@
 import time
 import re
+from pathlib import Path
 
 from config.settings import AppConfig
 from core.llm_call import run_prompt
@@ -29,7 +30,7 @@ def _is_uncertain_response(text: str) -> bool:
 
 
 def _pick_compose_context(context_pool: list[dict]) -> list[dict]:
-    top_k = int(getattr(AppConfig, "RUNTIME_COMPOSE_CONTEXT_TOP_K", 8))
+    top_k = int(AppConfig.RUNTIME_COMPOSE_CONTEXT_TOP_K)
     if top_k <= 0:
         return list(context_pool)
     return list(context_pool[:top_k])
@@ -42,13 +43,46 @@ def _safe_float(value: object, default: float = 0.0) -> float:
         return default
 
 
+def _normalize_heading(value: object) -> str:
+    text = str(value or "").strip()
+    while text.startswith("#"):
+        text = text[1:]
+    return text.strip()
+
+
+def _extract_source_and_module(doc: dict) -> tuple[str, str]:
+    metadata = doc.get("metadata", {}) or {}
+
+    source_raw = (
+        metadata.get("source")
+        or doc.get("source")
+        or doc.get("title")
+        or doc.get("id")
+        or "Unknown Document"
+    )
+    source_text = str(source_raw).strip()
+    source_name = Path(source_text).name or source_text or "Unknown Document"
+
+    module = (
+        _normalize_heading(metadata.get("h2"))
+        or _normalize_heading(metadata.get("h1"))
+        or _normalize_heading(doc.get("module"))
+        or "General"
+    )
+    return source_name, module
+
+
 def _build_compose_prompt_context(context_pool: list[dict]) -> list[dict]:
     prompt_docs: list[dict] = []
     for doc in context_pool:
+        source_name, module = _extract_source_and_module(doc)
+        doc_id = str(doc.get("id", "")).strip() or f"{source_name}::{module}"
         prompt_docs.append(
             {
-                "id": str(doc.get("id", "")).strip(),
-                "title": str(doc.get("title", "")).strip(),
+                "id": doc_id,
+                "title": source_name,
+                "source": source_name,
+                "module": module,
                 "score": _safe_float(doc.get("score"), 0.0),
                 "content": str(doc.get("content", "") or ""),
             }
@@ -103,10 +137,183 @@ def _ensure_non_empty_citations(response: str, citations: list[dict], context_po
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
+_COMPANY_ALIAS_MAP: dict[str, str] = {
+    "amazon": "Amazon",
+    "microsoft": "Microsoft",
+    "msft": "Microsoft",
+    "alphabet": "Alphabet",
+    "google": "Alphabet",
+}
+
+_MULTI_COMPANY_MARKERS = (
+    "all three companies",
+    "all three",
+    "all companies",
+    "these companies",
+    "three companies",
+)
+
 
 def _query_terms(query: str) -> set[str]:
     tokens = _TOKEN_PATTERN.findall(str(query or "").lower())
     return {tok for tok in tokens if len(tok) >= 3}
+
+
+def _companies_from_text(text: str) -> set[str]:
+    lowered = str(text or "").lower()
+    found: set[str] = set()
+    for alias, company in _COMPANY_ALIAS_MAP.items():
+        if alias in lowered:
+            found.add(company)
+    return found
+
+
+def _is_generic_multi_company_query(query: str) -> bool:
+    lowered = str(query or "").lower()
+    return any(marker in lowered for marker in _MULTI_COMPANY_MARKERS)
+
+
+def _required_companies_for_query(query: str, context_pool: list[dict]) -> set[str]:
+    project_default = {"Amazon", "Alphabet", "Microsoft"}
+    query_companies = _companies_from_text(query)
+    if len(query_companies) >= 2:
+        return query_companies
+    if not _is_generic_multi_company_query(query):
+        return set()
+
+    inferred: set[str] = set()
+    for doc in context_pool:
+        metadata = doc.get("metadata", {}) or {}
+        source_text = " ".join(
+            [
+                str(metadata.get("source", "") or ""),
+                str(doc.get("source", "") or ""),
+                str(doc.get("title", "") or ""),
+                str(doc.get("id", "") or ""),
+            ]
+        )
+        inferred.update(_companies_from_text(source_text))
+    if len(inferred) >= 2:
+        return inferred
+    return project_default
+
+
+def _companies_from_citations(citations: list[dict]) -> set[str]:
+    found: set[str] = set()
+    for c in citations:
+        text = " ".join(
+            [
+                str(c.get("id", "") or ""),
+                str(c.get("title", "") or ""),
+            ]
+        )
+        found.update(_companies_from_text(text))
+    return found
+
+
+def _missing_company_coverage(
+    query: str,
+    context_pool: list[dict],
+    citations: list[dict],
+) -> set[str]:
+    required = _required_companies_for_query(query, context_pool)
+    if len(required) < 2:
+        return set()
+    cited = _companies_from_citations(citations)
+    return required - cited
+
+
+def _single_company_target(query: str) -> str | None:
+    companies = _companies_from_text(query)
+    if len(companies) != 1:
+        return None
+    return next(iter(companies))
+
+
+def _out_of_scope_companies_for_single_target(
+    query: str,
+    response: str,
+    citations: list[dict],
+) -> set[str]:
+    target = _single_company_target(query)
+    if not target:
+        return set()
+    mentioned = _companies_from_text(response) | _companies_from_citations(citations)
+    extras = {c for c in mentioned if c != target}
+    return extras
+
+
+def _companies_from_doc_source(doc: dict) -> set[str]:
+    metadata = doc.get("metadata", {}) or {}
+    source_text = " ".join(
+        [
+            str(metadata.get("source", "") or ""),
+            str(doc.get("source", "") or ""),
+            str(doc.get("title", "") or ""),
+            str(doc.get("id", "") or ""),
+        ]
+    )
+    return _companies_from_text(source_text)
+
+
+def _ensure_compose_company_coverage(
+    query: str,
+    compose_context_pool: list[dict],
+    full_context_pool: list[dict],
+) -> list[dict]:
+    required = _required_companies_for_query(query, full_context_pool)
+    if len(required) < 2:
+        return compose_context_pool
+
+    composed = list(compose_context_pool)
+    existing_ids = {str(d.get("id", "")).strip() for d in composed}
+    covered: set[str] = set()
+    for doc in composed:
+        covered.update(_companies_from_doc_source(doc))
+
+    if required.issubset(covered):
+        return composed
+
+    for doc in full_context_pool:
+        doc_id = str(doc.get("id", "")).strip()
+        if not doc_id or doc_id in existing_ids:
+            continue
+        doc_companies = _companies_from_doc_source(doc)
+        if not doc_companies:
+            continue
+        if not (doc_companies & (required - covered)):
+            continue
+        composed.append(doc)
+        existing_ids.add(doc_id)
+        covered.update(doc_companies)
+        if required.issubset(covered):
+            break
+
+    return composed
+
+
+def _build_partial_multi_company_response(
+    response: str,
+    citations: list[dict],
+    missing_companies: set[str],
+) -> str:
+    missing_text = ", ".join(sorted(missing_companies))
+    covered = sorted(_companies_from_citations(citations))
+
+    base = str(response or "").strip()
+    if _is_uncertain_response(base) or not base:
+        if covered:
+            base = (
+                "Based on the currently retrieved evidence, this is a partial answer "
+                f"covering: {', '.join(covered)}."
+            )
+        else:
+            base = "The current retrieved evidence is insufficient for a complete cross-company answer."
+
+    if re.search(r"missing\s+explicit\s+evidence\s+for\s*:", base, flags=re.IGNORECASE):
+        return base
+
+    return f"{base}\n\nMissing explicit evidence for: {missing_text}."
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -157,7 +364,7 @@ def _should_apply_repair_extractive_fallback(
 ) -> bool:
     if not bool(state.get("repair_mode", False)):
         return False
-    if not bool(getattr(AppConfig, "RUNTIME_REPAIR_EXTRACTIVE_FALLBACK", True)):
+    if not bool(AppConfig.RUNTIME_REPAIR_EXTRACTIVE_FALLBACK):
         return False
     if not context_pool:
         return False
@@ -176,6 +383,11 @@ def compose_with_context_node(state: AgentState) -> AgentState:
 
     full_context_pool = state.get("context_pool", []) or []
     compose_context_pool = _pick_compose_context(full_context_pool)
+    compose_context_pool = _ensure_compose_company_coverage(
+        query=str(state.get("query", "")),
+        compose_context_pool=compose_context_pool,
+        full_context_pool=full_context_pool,
+    )
     prompt_context_pool = _build_compose_prompt_context(compose_context_pool)
 
     prompt_state = _build_prompt_state(state, prompt_context_pool)
@@ -184,11 +396,13 @@ def compose_with_context_node(state: AgentState) -> AgentState:
     response = str(out.get("response", "")).strip()
     citations = out.get("citations", []) or []
     forced_retry = False
+    multi_company_retry = False
+    single_company_retry = False
     repair_extractive_applied = False
 
     # 若模型在已有证据下仍输出“不确定”，触发一次强制抽取重试。
     if (
-        bool(getattr(AppConfig, "RUNTIME_FORCE_ANSWER_ON_EVIDENCE", True))
+        bool(AppConfig.RUNTIME_FORCE_ANSWER_ON_EVIDENCE)
         and compose_context_pool
         and _is_uncertain_response(response)
     ):
@@ -206,6 +420,67 @@ def compose_with_context_node(state: AgentState) -> AgentState:
         if retry_response:
             response = retry_response
             citations = retry_citations
+
+    # 单公司题：若回答/引用扩展到其它公司，触发一次范围收敛重试。
+    out_of_scope_companies = _out_of_scope_companies_for_single_target(
+        query=str(state.get("query", "")),
+        response=response,
+        citations=citations,
+    )
+    if out_of_scope_companies:
+        single_company_retry = True
+        target = _single_company_target(str(state.get("query", ""))) or "target company"
+        retry_state = _build_prompt_state(state, prompt_context_pool)
+        retry_state["repair_mode"] = True
+        retry_state["strict_reason"] = (
+            "Scope error for single-company question. "
+            f"The user asked only about {target}. "
+            f"Remove discussion of non-target companies: {', '.join(sorted(out_of_scope_companies))}. "
+            "Answer only for the target company with target-company citations."
+        )
+        retry_state["previous_response"] = response
+        retry_out = run_prompt(ComposeWithContextPrompt, retry_state)
+        retry_response = str(retry_out.get("response", "")).strip()
+        retry_citations = retry_out.get("citations", []) or []
+        if retry_response:
+            response = retry_response
+            citations = retry_citations
+
+    # 多公司题：若引用未覆盖所有公司，强制一次补证重试。
+    missing_company_coverage = _missing_company_coverage(
+        query=str(state.get("query", "")),
+        context_pool=full_context_pool,
+        citations=citations,
+    )
+    if missing_company_coverage:
+        multi_company_retry = True
+        retry_state = _build_prompt_state(state, prompt_context_pool)
+        retry_state["repair_mode"] = True
+        retry_state["strict_reason"] = (
+            "Multi-company evidence coverage is incomplete. "
+            f"Missing companies in citations: {', '.join(sorted(missing_company_coverage))}. "
+            "Revise the answer and include at least one citation per company/source. "
+            "Use as many citations as needed."
+        )
+        retry_state["previous_response"] = response
+        retry_out = run_prompt(ComposeWithContextPrompt, retry_state)
+        retry_response = str(retry_out.get("response", "")).strip()
+        retry_citations = retry_out.get("citations", []) or []
+        if retry_response:
+            response = retry_response
+            citations = retry_citations
+
+        missing_after_retry = _missing_company_coverage(
+            query=str(state.get("query", "")),
+            context_pool=full_context_pool,
+            citations=citations,
+        )
+        if missing_after_retry:
+            response = _build_partial_multi_company_response(
+                response=response,
+                citations=citations,
+                missing_companies=missing_after_retry,
+            )
 
     # repair 阶段优先转为抽取式回答，避免再次发生逻辑扩写错误。
     if _should_apply_repair_extractive_fallback(
@@ -243,6 +518,8 @@ def compose_with_context_node(state: AgentState) -> AgentState:
                     "compose_context_chars": _context_chars(compose_context_pool),
                     "compose_prompt_context_chars": _context_chars(prompt_context_pool),
                     "forced_retry": forced_retry,
+                    "multi_company_retry": multi_company_retry,
+                    "single_company_retry": single_company_retry,
                     "repair_extractive_applied": repair_extractive_applied,
                     "response_revision": state.get("response_revision", 0),
                 },

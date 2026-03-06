@@ -17,7 +17,7 @@ def _clamp_score(value: object, default: float) -> float:
 
 
 def _normalize_verify_output(out: dict) -> dict:
-    threshold = float(getattr(AppConfig, "VERIFY_PASS_SCORE_THRESHOLD", 0.68))
+    threshold = float(AppConfig.VERIFY_PASS_SCORE_THRESHOLD)
 
     explicit_is_hallucination = out.get("is_hallucination")
     if explicit_is_hallucination is None:

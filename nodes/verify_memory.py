@@ -64,7 +64,7 @@ def verify_memory_node(state: AgentState) -> AgentState:
     effective_query = str(state.get("resolved_query") or state.get("query", "")).strip()
     prompt_state: AgentState = dict(state)
     prompt_state["query"] = effective_query
-    threshold = float(getattr(AppConfig, "MEMORY_SUFFICIENT_SCORE_THRESHOLD", 0.70))
+    threshold = float(AppConfig.MEMORY_SUFFICIENT_SCORE_THRESHOLD)
 
     shortcut_no_memory = (ltm_hits_count <= 0 and used_memory_chunks <= 0)
     shortcut_low_conf = (

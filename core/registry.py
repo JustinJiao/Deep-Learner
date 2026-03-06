@@ -210,13 +210,25 @@ NODE_CONTRACTS: dict[str, NodeContract] = {
     "strict_verify": NodeContract(
         name="strict_verify",
         reads={"query", "response", "citations", "context_pool", "response_revision"},
-        writes={"strict_score", "strict_verdict", "failure_type", "strict_reason", "verified_revision", "steps_log"},
+        writes={
+            "strict_score",
+            "strict_total_score",
+            "strict_action",
+            "strict_metrics",
+            "strict_confidence",
+            "strict_verdict",
+            "repair_trigger",
+            "failure_type",
+            "strict_reason",
+            "verified_revision",
+            "steps_log",
+        },
         llm_node=True,
     ),
     "degrade_or_abstain": NodeContract(
         name="degrade_or_abstain",
-        reads={"strict_reason", "failure_type"},
-        writes={"response", "citations", "run_status", "steps_log"},
+        reads={"strict_reason", "failure_type", "repair_trigger"},
+        writes={"response", "citations", "run_status", "strict_status", "steps_log"},
     ),
     "retrieve_phase2": NodeContract(
         name="retrieve_phase2",
@@ -230,7 +242,7 @@ NODE_CONTRACTS: dict[str, NodeContract] = {
     ),
     "set_repair_mode": NodeContract(
         name="set_repair_mode",
-        reads={"strict_verdict", "failure_type", "strict_reason", "repair_used"},
+        reads={"strict_verdict", "failure_type", "strict_reason", "repair_trigger", "repair_used"},
         writes={"repair_mode", "repair_used", "repair_reason", "steps_log"},
     ),
 }

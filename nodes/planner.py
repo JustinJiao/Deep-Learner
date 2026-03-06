@@ -21,7 +21,7 @@ def planner_node(state: AgentState) -> AgentState:
     state["plan"] = ExecutionPlan(
         steps=steps,
         step_idx=0,
-        max_loops=int(getattr(AppConfig, "MAX_REPAIR_LOOPS", 3)),
+        max_loops=int(AppConfig.MAX_REPAIR_LOOPS),
     )
 
     state["is_direct_path"] = is_direct

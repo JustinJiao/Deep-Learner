@@ -16,6 +16,16 @@ class LTMFactExtractPrompt(PromptContract):
     - content
     - score (0-1)
 
+    Language requirement:
+    - Output must be English-only.
+    - Keep JSON keys unchanged; JSON string values must be in English.
+
+    Project scope:
+    - Extract only facts/preferences relevant to QA over:
+      1) Amazon 10K 2024.pdf
+      2) Alphabet 10K 2024.pdf
+      3) MSFT 10-K.pdf
+
     返回 JSON:
     {
       "fact_candidates": [

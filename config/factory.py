@@ -92,9 +92,12 @@ class ResourceFactory:
                 )
 
                 index_params = {
-                    "metric_type": "COSINE",
-                    "index_type": "HNSW",
-                    "params": {"M": 8, "efConstruction": 64},
+                    "metric_type": AppConfig.MILVUS_INDEX_METRIC_TYPE,
+                    "index_type": AppConfig.MILVUS_INDEX_TYPE,
+                    "params": {
+                        "M": AppConfig.MILVUS_INDEX_M,
+                        "efConstruction": AppConfig.MILVUS_INDEX_EF_CONSTRUCTION,
+                    },
                 }
                 cls._milvus_col.create_index(
                     field_name="vector",
@@ -171,9 +174,12 @@ class ResourceFactory:
                 )
 
                 index_params = {
-                    "metric_type": "COSINE",
-                    "index_type": "HNSW",
-                    "params": {"M": 8, "efConstruction": 64},
+                    "metric_type": AppConfig.MILVUS_INDEX_METRIC_TYPE,
+                    "index_type": AppConfig.MILVUS_INDEX_TYPE,
+                    "params": {
+                        "M": AppConfig.MILVUS_INDEX_M,
+                        "efConstruction": AppConfig.MILVUS_INDEX_EF_CONSTRUCTION,
+                    },
                 }
 
                 cls._milvus_ltm_col.create_index(
