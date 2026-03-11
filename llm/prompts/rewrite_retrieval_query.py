@@ -3,54 +3,95 @@ from llm.prompts.base import PromptContract
 
 class RewriteRetrievalQueryPrompt(PromptContract):
     READS = ["query", "resolved_query", "short_term_memory", "recent_messages", "long_term_memory"]
-    WRITES = ["retrieval_query"]
+    WRITES = ["retrieval_queries"]
 
     SYSTEM = """
-你是 Deep-Learner 的检索查询改写器。
+You are the retrieval query decomposer for the Deep-Learner system.
 
 Language requirement:
 - Output must be English-only.
-- Keep JSON keys unchanged; JSON string values must be in English.
+- Keep JSON keys unchanged.
+- JSON string values must be English.
 
 Project scope:
-- Retrieval is limited to these filings:
-  1) Amazon 10K 2024.pdf
-  2) Alphabet 10K 2024.pdf
-  3) MSFT 10-K.pdf
-- Do not introduce entities outside this scope.
+Retrieval is limited to the following filings:
 
-目标：在不改变语义的前提下，生成“高召回且低噪声”的检索查询。
+1) Amazon 10K 2024.pdf
+2) Alphabet 10K 2024.pdf
+3) MSFT 10-K.pdf
 
-规则：
-1. 保留核心语义：实体、事件、时间、地点、范围、否定条件，不得改写结论方向。
-2. 先去歧义再扩展：先把指代补全，再补充必要别名/全称；不要堆砌大量同义词。
-3. 查询应短且聚焦：优先 8~24 个词（中英文混合按语义计），避免口语冗词和无关修饰。
-4. 当问题是 factoid（人物/时间/地点/定义）时，优先保留“实体 + 关系 + 限定词”。
-5. 当问题已足够清晰，直接返回 resolved_query（或原 query）。
-6. 禁止引入用户未提及的新事实、数字、年份或推测性条件。
-7. 人名/地名若存在常见拼写变体（如 Muhammad/Mohammad/Muhammed），可追加 1 个最常见变体，避免召回漏失。
-8. For multi-company questions (explicit lists or wording like \"these companies\"/\"all three\"), keep the company anchors in query terms (Amazon, Alphabet/Google, Microsoft/MSFT) to maximize cross-company recall.
+Do not introduce entities outside this scope.
 
-只输出 JSON：
+Goal:
+Convert the user question into multiple high-quality retrieval queries that maximize recall while minimizing noise.
+
+Core idea:
+The user question may require multiple facts. You must decompose it into the minimal set of independent retrieval queries needed to answer the question.
+
+Rules:
+
+1. Preserve semantics
+Do NOT change the meaning of the original question.
+
+2. Decompose when necessary
+If the question requires information about multiple entities, companies, metrics, or time points, split it into multiple queries.
+
+Example:
+User question:
+"What were the 2024 revenues of Microsoft, Google, and Amazon?"
+
+Output queries should be:
+- Microsoft 2024 revenue fiscal year
+- Alphabet 2024 revenue fiscal year
+- Amazon 2024 revenue fiscal year
+
+3. Each query must be independently retrievable
+Each query should correspond to one specific fact that can be retrieved from a filing.
+
+4. Keep queries concise
+Prefer 6-20 words.
+
+5. Include company anchors when relevant
+Use:
+- Amazon
+- Alphabet or Google
+- Microsoft or MSFT
+
+6. Include filing anchors when helpful
+Examples:
+- Amazon 10K 2024
+- Alphabet 10K 2024
+- Microsoft 10-K
+
+7. Do NOT introduce new facts or assumptions.
+
+8. If the question only needs one fact, return a single query.
+
+Output JSON format ONLY:
+
 {
-  "retrieval_query": "..."
+  "retrieval_queries": [
+    "...",
+    "...",
+    "..."
+  ]
 }
 """
 
     def build_user_prompt(self, state):
         return f"""
-用户原始问题:
+User original question:
 {state.get("query", "")}
 
-指代消解后问题:
+Resolved question:
 {state.get("resolved_query", "")}
 
-短期记忆:
+Short-term memory:
 {state.get("short_term_memory", "")}
 
-最近对话:
+Recent messages:
 {state.get("recent_messages", [])}
 
-长期记忆:
+Long-term memory:
 {state.get("long_term_memory", "")}
 """

@@ -235,6 +235,24 @@ def _extract_runtime_signals(state: dict[str, Any]) -> dict[str, Any]:
         if verdict == "FAIL" and failure_type:
             strict_fail_types.append(failure_type)
 
+    llm_trace: list[dict[str, Any]] = []
+    for item in state.get("llm_trace", []) or []:
+        if not isinstance(item, dict):
+            continue
+        llm_trace.append(
+            {
+                "prompt": str(item.get("prompt", "")),
+                "node": str(item.get("node", "")),
+                "task": str(item.get("task", "")),
+                "provider": str(item.get("provider", "")),
+                "model": str(item.get("model", "")),
+                "latency_ms": _safe_float(item.get("latency_ms"), fallback=float("nan")),
+                "parse_mode": str(item.get("parse_mode", "")),
+                "error": str(item.get("error", "")),
+                "output_chars": int(_safe_float(item.get("output_chars", 0), fallback=0.0)),
+            }
+        )
+
     return {
         "runtime_stage": state.get("runtime_stage"),
         "memory_verdict": state.get("memory_verdict"),
@@ -243,6 +261,7 @@ def _extract_runtime_signals(state: dict[str, Any]) -> dict[str, Any]:
         "strict_verdict": state.get("strict_verdict"),
         "failure_type": state.get("failure_type"),
         "strict_fail_types": strict_fail_types,
+        "llm_trace": llm_trace,
     }
 
 
@@ -315,6 +334,7 @@ def _executor_worker(
                 "strict_verdict": "",
                 "failure_type": "",
                 "strict_fail_types": [],
+                "llm_trace": [],
             }
         )
     finally:
@@ -386,6 +406,7 @@ def _run_single_query_state_inline(
             "strict_verdict": "",
             "failure_type": "",
             "strict_fail_types": [],
+            "llm_trace": [],
         }
     finally:
         if isolate_ltm:
@@ -439,6 +460,7 @@ def _run_single_query_state(
             "strict_verdict": "",
             "failure_type": "",
             "strict_fail_types": [],
+            "llm_trace": [],
         }
 
     if out_q.empty():
@@ -454,6 +476,7 @@ def _run_single_query_state(
             "strict_verdict": "",
             "failure_type": "",
             "strict_fail_types": [],
+            "llm_trace": [],
         }
 
     return out_q.get()
@@ -511,6 +534,7 @@ def _run_executor(
                 "strict_verdict": state.get("strict_verdict", ""),
                 "failure_type": state.get("failure_type", ""),
                 "strict_fail_types": state.get("strict_fail_types", []) or [],
+                "llm_trace": state.get("llm_trace", []) or [],
             }
         )
         print(
@@ -712,6 +736,87 @@ def _flatten_for_csv(records: list[dict[str, Any]], k_values: list[int]) -> list
     return flat_rows
 
 
+def _aggregate_llm_node_metrics(records: list[dict[str, Any]]) -> dict[str, Any]:
+    node_calls: dict[str, int] = Counter()
+    node_latencies: dict[str, list[float]] = {}
+    node_models: dict[str, Counter[str]] = {}
+    node_providers: dict[str, Counter[str]] = {}
+    node_parse_modes: dict[str, Counter[str]] = {}
+    node_errors: dict[str, int] = Counter()
+    node_query_ids: dict[str, set[str]] = {}
+    node_quality_correctness: dict[str, list[float]] = {}
+    node_quality_relevancy: dict[str, list[float]] = {}
+    node_quality_ok: dict[str, list[float]] = {}
+
+    for record in records:
+        query_id = str(record.get("id", ""))
+        trace = record.get("llm_trace", []) or []
+        executed_nodes: set[str] = set()
+
+        for item in trace:
+            if not isinstance(item, dict):
+                continue
+            node = str(item.get("node", "")).strip() or "unknown"
+            provider = str(item.get("provider", "")).strip()
+            model = str(item.get("model", "")).strip()
+            parse_mode = str(item.get("parse_mode", "")).strip() or "unknown"
+            error = str(item.get("error", "")).strip()
+            latency_ms = _safe_float(item.get("latency_ms"), fallback=float("nan"))
+
+            node_calls[node] += 1
+            node_latencies.setdefault(node, [])
+            if not math.isnan(latency_ms):
+                node_latencies[node].append(latency_ms)
+
+            node_models.setdefault(node, Counter())
+            if model:
+                model_key = f"{provider}:{model}" if provider else model
+                node_models[node][model_key] += 1
+
+            node_providers.setdefault(node, Counter())
+            if provider:
+                node_providers[node][provider] += 1
+
+            node_parse_modes.setdefault(node, Counter())
+            node_parse_modes[node][parse_mode] += 1
+
+            if error:
+                node_errors[node] += 1
+
+            executed_nodes.add(node)
+
+        answer_correctness = _safe_float(record.get("ragas_answer_correctness"), fallback=float("nan"))
+        answer_relevancy = _safe_float(record.get("ragas_answer_relevancy"), fallback=float("nan"))
+        run_ok = 1.0 if str(record.get("run_status", "")).strip().lower() == "ok" else 0.0
+        for node in executed_nodes:
+            node_query_ids.setdefault(node, set()).add(query_id)
+            node_quality_ok.setdefault(node, []).append(run_ok)
+            if not math.isnan(answer_correctness):
+                node_quality_correctness.setdefault(node, []).append(answer_correctness)
+            if not math.isnan(answer_relevancy):
+                node_quality_relevancy.setdefault(node, []).append(answer_relevancy)
+
+    out: dict[str, Any] = {}
+    for node in sorted(node_calls.keys()):
+        latencies = node_latencies.get(node, [])
+        out[node] = {
+            "call_count": int(node_calls[node]),
+            "query_coverage": len(node_query_ids.get(node, set())),
+            "avg_latency_ms": _safe_mean(latencies),
+            "p50_latency_ms": statistics.median(latencies) if latencies else float("nan"),
+            "p95_latency_ms": _safe_p95(latencies),
+            "providers": dict(node_providers.get(node, Counter())),
+            "models": dict(node_models.get(node, Counter())),
+            "parse_modes": dict(node_parse_modes.get(node, Counter())),
+            "error_count": int(node_errors.get(node, 0)),
+            # 注意：以下质量指标是“该节点执行样本的最终答案质量代理”，用于横向比较。
+            "avg_answer_correctness_proxy": _safe_mean(node_quality_correctness.get(node, [])),
+            "avg_answer_relevancy_proxy": _safe_mean(node_quality_relevancy.get(node, [])),
+            "ok_rate_proxy": _safe_mean(node_quality_ok.get(node, [])),
+        }
+    return out
+
+
 def _render_stats_table(summary: dict[str, Any]) -> str:
     lines = ["| Metric | Value |", "|---|---|"]
     lines.append(f"| query_count | {summary['query_count']} |")
@@ -721,6 +826,7 @@ def _render_stats_table(summary: dict[str, Any]) -> str:
     lines.append(f"| non_empty_context_rate | {summary['non_empty_context_rate']:.4f} |")
     lines.append(f"| run_status_counts | {summary['run_status_counts']} |")
     lines.append(f"| ragas_status | {summary.get('ragas_status', 'unknown')} |")
+    lines.append(f"| llm_total_call_count | {summary.get('llm_total_call_count', 0)} |")
     lines.append(f"| memory_sufficient_rate | {summary['memory_sufficient_rate']:.4f} |")
     lines.append(f"| phase2_trigger_rate | {summary['phase2_trigger_rate']:.4f} |")
     lines.append(f"| repair_trigger_rate | {summary['repair_trigger_rate']:.4f} |")
@@ -800,6 +906,9 @@ def run_all(
             if ft:
                 strict_fail_counter[ft] += 1
 
+    llm_node_metrics = _aggregate_llm_node_metrics(records)
+    llm_total_call_count = int(sum(v.get("call_count", 0) for v in llm_node_metrics.values()))
+
     summary = {
         "dataset_path": str(dataset_path),
         "query_count": len(records),
@@ -812,6 +921,9 @@ def run_all(
         "ragas_timeout_seconds": 0 if ragas_timeout_seconds is None else int(ragas_timeout_seconds),
         "ragas_context_top_k": int(ragas_context_top_k),
         "ragas_context_max_chars": int(ragas_context_max_chars),
+        "llm_provider_default": str(AppConfig.LLM_PROVIDER),
+        "llm_force_provider": str(AppConfig.LLM_FORCE_PROVIDER or ""),
+        "llm_routing_enabled": bool(AppConfig.LLM_ROUTING_ENABLED),
         "ragas_status": ragas_meta.get("status", "unknown"),
         "ragas_error": ragas_meta.get("error"),
         "average_latency_ms": statistics.mean(r["latency_ms"] for r in records),
@@ -834,6 +946,8 @@ def run_all(
         "ragas": ragas_summary,
         "beir_precision": precision_from_beir,
         "beir_raw": beir_metrics,
+        "llm_total_call_count": llm_total_call_count,
+        "llm_node_metrics": llm_node_metrics,
     }
 
     run_dir = output_dir / run_name

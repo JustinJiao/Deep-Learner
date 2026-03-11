@@ -1,12 +1,22 @@
 # llm/client.py
-from typing import Optional
+import time
+from typing import Any, Optional
+
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+
 try:
     from langchain_anthropic import ChatAnthropic
 except Exception:  # pragma: no cover
     ChatAnthropic = None
-from langchain_core.messages import SystemMessage, HumanMessage
+
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+except Exception:  # pragma: no cover
+    ChatGoogleGenerativeAI = None
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from config.settings import AppConfig
 
 
@@ -16,8 +26,16 @@ class LLMService:
     """
 
     def __init__(self, provider: Optional[str] = None):
-        self.provider = provider or AppConfig.LLM_PROVIDER
+        self.provider = self._normalize_provider(provider or AppConfig.LLM_PROVIDER)
         self._client_cache: dict[tuple[str, str], object] = {}
+        self._provider_last_call_at: dict[str, float] = {}
+
+    @staticmethod
+    def _normalize_provider(provider: str) -> str:
+        text = str(provider or "").strip().lower()
+        if text == "claude":
+            return "anthropic"
+        return text
 
     def _default_model_for_provider(self, provider: str) -> str:
         if provider == "openai":
@@ -25,11 +43,53 @@ class LLMService:
         if provider == "ollama":
             return AppConfig.OLLAMA_CHAT_MODEL
         if provider == "anthropic":
-            return AppConfig.ANTHROPIC_COMPOSE_MODEL
+            return AppConfig.ANTHROPIC_CHAT_MODEL
+        if provider == "gemini":
+            return AppConfig.GEMINI_CHAT_MODEL
         raise ValueError(f"不支持的 LLM Provider: {provider}")
+
+    def _resolve_forced_provider(self, provider: str, task_norm: str) -> tuple[str, str]:
+        if provider == "openai":
+            model_map = {
+                "compose": AppConfig.OPENAI_COMPOSE_MODEL,
+                "verify": AppConfig.OPENAI_VERIFY_MODEL,
+                "rewrite": AppConfig.OPENAI_REWRITE_MODEL,
+                "memory": AppConfig.OPENAI_MEMORY_MODEL,
+                "default": AppConfig.OPENAI_CHAT_MODEL,
+            }
+            return ("openai", model_map.get(task_norm, AppConfig.OPENAI_CHAT_MODEL))
+
+        if provider == "anthropic":
+            model_map = {
+                "compose": AppConfig.ANTHROPIC_COMPOSE_MODEL,
+                "verify": AppConfig.ANTHROPIC_VERIFY_MODEL,
+                "rewrite": AppConfig.ANTHROPIC_REWRITE_MODEL,
+                "memory": AppConfig.ANTHROPIC_MEMORY_MODEL,
+                "default": AppConfig.ANTHROPIC_CHAT_MODEL,
+            }
+            return ("anthropic", model_map.get(task_norm, AppConfig.ANTHROPIC_CHAT_MODEL))
+
+        if provider == "gemini":
+            model_map = {
+                "compose": AppConfig.GEMINI_COMPOSE_MODEL,
+                "verify": AppConfig.GEMINI_VERIFY_MODEL,
+                "rewrite": AppConfig.GEMINI_REWRITE_MODEL,
+                "memory": AppConfig.GEMINI_MEMORY_MODEL,
+                "default": AppConfig.GEMINI_CHAT_MODEL,
+            }
+            return ("gemini", model_map.get(task_norm, AppConfig.GEMINI_CHAT_MODEL))
+
+        if provider == "ollama":
+            return ("ollama", AppConfig.OLLAMA_CHAT_MODEL)
+
+        raise ValueError(f"不支持的 LLM_FORCE_PROVIDER: {provider}")
 
     def _resolve_route(self, task: str) -> tuple[str, str]:
         task_norm = str(task or "default").strip().lower()
+        forced_provider = self._normalize_provider(AppConfig.LLM_FORCE_PROVIDER)
+        if forced_provider:
+            return self._resolve_forced_provider(forced_provider, task_norm)
+
         if AppConfig.LLM_ROUTING_ENABLED:
             if task_norm == "compose":
                 return ("openai", AppConfig.OPENAI_COMPOSE_MODEL)
@@ -41,9 +101,9 @@ class LLMService:
                 )
                 return ("openai", model)
             if task_norm == "memory":
-                return ("anthropic", AppConfig.ANTHROPIC_MEMORY_MODEL)
+                return ("openai", AppConfig.OPENAI_MEMORY_MODEL)
 
-        provider = self.provider
+        provider = self._normalize_provider(self.provider)
         return (provider, self._default_model_for_provider(provider))
 
     def _build_client(self, provider: str, model: str):
@@ -74,6 +134,20 @@ class LLMService:
                 timeout=AppConfig.ANTHROPIC_TIMEOUT_SECONDS,
                 max_retries=AppConfig.ANTHROPIC_MAX_RETRIES,
             )
+        if provider == "gemini":
+            if ChatGoogleGenerativeAI is None:
+                raise ImportError(
+                    "langchain-google-genai is not installed; Gemini routing is unavailable"
+                )
+            if not AppConfig.GEMINI_API_KEY:
+                raise ValueError("GEMINI_API_KEY/GOOGLE_API_KEY is required for Gemini provider")
+            return ChatGoogleGenerativeAI(
+                model=model,
+                google_api_key=AppConfig.GEMINI_API_KEY,
+                temperature=AppConfig.GEMINI_TEMPERATURE,
+                timeout=AppConfig.GEMINI_TIMEOUT_SECONDS,
+                max_retries=AppConfig.GEMINI_MAX_RETRIES,
+            )
         raise ValueError(f"不支持的 LLM Provider: {provider}")
 
     def _get_client(self, provider: str, model: str):
@@ -84,17 +158,55 @@ class LLMService:
             self._client_cache[key] = client
         return client
 
+    def _maybe_rate_limit_provider(self, provider: str) -> None:
+        if provider != "gemini":
+            return
+
+        min_interval = float(AppConfig.GEMINI_MIN_CALL_INTERVAL_SECONDS)
+        if min_interval <= 0:
+            return
+
+        now = time.monotonic()
+        last = self._provider_last_call_at.get(provider, 0.0)
+        wait_s = min_interval - (now - last)
+        if wait_s > 0:
+            time.sleep(wait_s)
+
+    def chat_completion_with_meta(
+        self,
+        prompt: str,
+        system_prompt: str,
+        task: str = "default",
+    ) -> dict[str, Any]:
+        provider, model = self._resolve_route(task)
+        llm = self._get_client(provider, model)
+        self._maybe_rate_limit_provider(provider)
+        self._provider_last_call_at[provider] = time.monotonic()
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=prompt),
+        ]
+        start = time.perf_counter()
+        response = llm.invoke(messages)
+        latency_ms = (time.perf_counter() - start) * 1000.0
+        content = response.content if hasattr(response, "content") else str(response)
+        return {
+            "content": str(content),
+            "provider": provider,
+            "model": model,
+            "task": str(task or "default"),
+            "latency_ms": float(latency_ms),
+        }
+
     def chat_completion(
         self,
         prompt: str,
         system_prompt: str,
         task: str = "default",
     ) -> str:
-        provider, model = self._resolve_route(task)
-        llm = self._get_client(provider, model)
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=prompt),
-        ]
-        response = llm.invoke(messages)
-        return response.content
+        payload = self.chat_completion_with_meta(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            task=task,
+        )
+        return str(payload["content"])

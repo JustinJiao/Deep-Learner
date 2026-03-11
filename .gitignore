@@ -90,6 +90,7 @@ interface/.files/
 # 8. Evaluation Artifacts (Do Not Commit)
 # ==========================================
 AI-Essential/
+runs/
 
 evaluation_suite/datasets/testset_10k_*.jsonl
 !evaluation_suite/datasets/testset_10k_3cats_60.jsonl

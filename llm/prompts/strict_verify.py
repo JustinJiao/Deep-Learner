@@ -68,6 +68,7 @@ Project scope (must follow):
 多公司口径（重要）：
 - If the question clearly asks about multiple companies (for example \"these companies\", \"all three\", or explicit company lists), a response that gives a cross-company conclusion without coverage for Amazon, Alphabet, and Microsoft should be penalized on completeness and hallucination.
 - If one or more required companies are missing evidence/citations, prefer lower completeness and mark unsupported_claim=true when the response over-generalizes.
+- If the query asks for latest/most recent fiscal year, and context includes multi-year values for the same company/metric, using an earlier-year value as final latest-year answer should be treated as contradiction/unsupported.
 
 注意：
 - 分数必须是 0~5 的数字。

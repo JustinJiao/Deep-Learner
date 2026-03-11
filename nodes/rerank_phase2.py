@@ -1,13 +1,65 @@
 import time
+import re
 from pathlib import Path
 
 from config.settings import AppConfig
 from core.state import AgentState, StepLog
 from nodes.log_utils import clip_text, preview_docs
+from nodes.rerank_route_features import route_consistency_delta
 from tools.retrieve_tool.base import SearchResult
 from tools.retrieve_tool.rerank import Reranker
 
 _RERANKER: Reranker | None = None
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_YEAR_RE = re.compile(r"\b(20\d{2})\b")
+_GROUPED_NUM_RE = re.compile(r"\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b")
+_REVENUE_QUERY_TERMS = {"revenue", "sales", "net", "segment"}
+_BALANCE_QUERY_TERMS = {"balance", "year-end", "as of", "end of"}
+_CASH_EQ_QUERY_TERMS = {"cash and cash equivalents", "cash equivalents"}
+_REVENUE_HEADING_STRONG_PENALTY_TERMS = {
+    "cost of sales",
+    "foreign currency",
+    "liabilities",
+    "interest",
+    "tax",
+    "effective rate",
+    "hedging",
+    "investment",
+    "allowance",
+    "cash flow",
+    "equity",
+    "debt",
+    "eps",
+}
+_BALANCE_HEADING_BOOST_TERMS = {
+    "balance sheet",
+    "balance sheets",
+    "assets",
+}
+_BALANCE_HEADING_PENALTY_TERMS = {
+    "stockholders",
+    "comprehensive income",
+    "operating activities",
+    "cash provided by operating activities",
+}
+_REVENUE_HEADING_MEDIUM_PENALTY_TERMS = {
+    "income",
+    "expense",
+}
+_STOP_TERMS = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "from",
+    "which",
+    "what",
+    "most",
+    "latest",
+    "fiscal",
+    "year",
+}
 
 
 def _get_reranker() -> Reranker | None:
@@ -85,6 +137,103 @@ def _extract_source_name(doc: dict) -> str:
     source_text = str(source_raw).strip()
     return Path(source_text).name or source_text or "Unknown Document"
 
+
+def _query_terms(query: str) -> set[str]:
+    return {
+        tok
+        for tok in _TOKEN_RE.findall(str(query or "").lower())
+        if len(tok) >= 3 and tok not in _STOP_TERMS
+    }
+
+
+def _query_calibration_delta(query: str, doc: dict) -> float:
+    query_lower = str(query or "").lower()
+    if not query_lower.strip():
+        return 0.0
+
+    content = str(doc.get("content", "") or "")
+    content_lower = content.lower()
+    heading = str((doc.get("metadata", {}) or {}).get("h2", "") or "").lower()
+
+    q_terms = _query_terms(query_lower)
+    d_terms = set(_TOKEN_RE.findall(content_lower))
+    overlap = float(len(q_terms & d_terms)) / float(max(1, len(q_terms)))
+
+    query_years = set(_YEAR_RE.findall(query_lower))
+    year_hit = 1.0 if (query_years and any(y in content for y in query_years)) else 0.0
+    numeric_density = min(1.0, float(len(_GROUPED_NUM_RE.findall(content))) / 8.0)
+
+    anchor_hits = 0.0
+    if "aws" in query_lower and "aws" in content_lower:
+        anchor_hits += 1.0
+    if "google cloud" in query_lower and "google cloud" in content_lower:
+        anchor_hits += 1.0
+    if ("azure" in query_lower or "microsoft cloud" in query_lower) and (
+        "azure" in content_lower or "microsoft cloud" in content_lower
+    ):
+        anchor_hits += 1.0
+    if any(term in query_lower for term in _REVENUE_QUERY_TERMS) and (
+        "revenue" in content_lower or "net sales" in content_lower or "sales" in content_lower
+    ):
+        anchor_hits += 1.0
+    if "cash and cash equivalents" in query_lower and "cash and cash equivalents" in content_lower:
+        anchor_hits += 1.0
+    anchor_score = min(1.0, anchor_hits / 3.0)
+
+    penalty = 0.0
+    asks_revenue = any(term in query_lower for term in _REVENUE_QUERY_TERMS)
+    heading_is_revenue = ("revenue" in heading) or ("net sales" in heading) or ("cloud" in heading)
+    if "cost of sales" in heading:
+        heading_is_revenue = False
+    if asks_revenue and not heading_is_revenue:
+        if any(term in heading for term in _REVENUE_HEADING_STRONG_PENALTY_TERMS):
+            penalty = 0.34
+        elif any(term in heading for term in _REVENUE_HEADING_MEDIUM_PENALTY_TERMS):
+            penalty = 0.22
+
+    balance_boost = 0.0
+    asks_balance = any(term in query_lower for term in _BALANCE_QUERY_TERMS)
+    asks_cash_eq = any(term in query_lower for term in _CASH_EQ_QUERY_TERMS)
+    if asks_balance:
+        if any(term in heading for term in _BALANCE_HEADING_BOOST_TERMS):
+            balance_boost += 0.14
+        if "consolidated balance sheets" in content_lower:
+            balance_boost += 0.12
+    if asks_cash_eq:
+        if "cash and cash equivalents" in content_lower:
+            balance_boost += 0.14
+        if "cash, cash equivalents, and short term marketable securities" in content_lower:
+            penalty += 0.08
+        if "cash, cash equivalents, and marketable securities" in content_lower:
+            penalty += 0.06
+    if asks_balance and any(term in heading for term in _BALANCE_HEADING_PENALTY_TERMS):
+        penalty += 0.12
+
+    delta = (
+        (overlap * 0.22)
+        + (year_hit * 0.08)
+        + (numeric_density * 0.12)
+        + (anchor_score * 0.16)
+        + balance_boost
+        - penalty
+    )
+    delta += route_consistency_delta(query=query_lower, doc=doc)
+    return float(delta)
+
+
+def _apply_query_calibration(docs: list[dict], query: str) -> tuple[list[dict], int]:
+    if not docs:
+        return [], 0
+    adjusted: list[dict] = []
+    touched = 0
+    for doc in docs:
+        delta = _query_calibration_delta(query=query, doc=doc)
+        if delta != 0.0:
+            doc["score"] = float(doc.get("score", 0.0)) + float(delta)
+            touched += 1
+        adjusted.append(doc)
+    adjusted.sort(key=lambda x: float(x.get("score", 0.0)), reverse=True)
+    return adjusted, touched
 
 def _coverage_window_top_k() -> int:
     configured = int(AppConfig.RETRIEVAL_SOURCE_COVERAGE_WINDOW_TOP_K)
@@ -183,6 +332,10 @@ def rerank_phase2_node(state: AgentState) -> AgentState:
         reranked_docs = _to_context_docs(reranked)
         rerank_enabled = True
 
+    reranked_docs, query_calibrated_docs = _apply_query_calibration(
+        docs=reranked_docs,
+        query=str(query or ""),
+    )
     reranked_docs, source_coverage_added = _enforce_source_coverage(
         ranked_docs=reranked_docs,
         candidates=candidates,
@@ -207,6 +360,7 @@ def rerank_phase2_node(state: AgentState) -> AgentState:
                     "rerank_input_count": len(candidates),
                     "rerank_output_count": len(reranked_docs),
                     "rerank_enabled": rerank_enabled,
+                    "query_calibrated_docs": query_calibrated_docs,
                     "source_coverage_count": source_coverage_count,
                     "source_coverage_added": source_coverage_added,
                     "context_pool_preview": preview_docs(reranked_docs),

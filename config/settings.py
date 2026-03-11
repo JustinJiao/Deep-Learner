@@ -36,10 +36,33 @@ class AppConfig:
     SV_TOTAL_THRESHOLD = float(os.getenv("SV_TOTAL_THRESHOLD", "3.5"))
     SV_CRITICAL_SCORE_FLOOR = float(os.getenv("SV_CRITICAL_SCORE_FLOOR", "1.0"))
     SV_BLOCK_UNSUPPORTED_CLAIM = env_bool("SV_BLOCK_UNSUPPORTED_CLAIM", True)
+    SV_BLOCK_CITATION_MISSING = env_bool("SV_BLOCK_CITATION_MISSING", True)
+    SV_BLOCK_CITATION_NOT_IN_CONTEXT = env_bool("SV_BLOCK_CITATION_NOT_IN_CONTEXT", True)
+    SV_ALLOW_NONEMPTY_CITATIONS_OVERRIDE_MISSING = env_bool(
+        "SV_ALLOW_NONEMPTY_CITATIONS_OVERRIDE_MISSING",
+        False,
+    )
+    SV_NUMERIC_CITATION_MISMATCH_MIN_COUNT = int(
+        os.getenv("SV_NUMERIC_CITATION_MISMATCH_MIN_COUNT", 1)
+    )
     # 当已有检索证据时，禁止 compose 直接输出“不确定”
     RUNTIME_FORCE_ANSWER_ON_EVIDENCE = env_bool("RUNTIME_FORCE_ANSWER_ON_EVIDENCE", True)
     # repair 阶段失败后，优先转为抽取式回答以降低逻辑扩写错误
     RUNTIME_REPAIR_EXTRACTIVE_FALLBACK = env_bool("RUNTIME_REPAIR_EXTRACTIVE_FALLBACK", True)
+    # memory draft 节点 JSON/格式失败时的额外重试次数（总尝试次数 = 1 + 该值）
+    RUNTIME_MEMORY_DRAFT_MAX_RETRIES = int(os.getenv("RUNTIME_MEMORY_DRAFT_MAX_RETRIES", 1))
+    # memory 判定为 SUFFICIENT 前，是否再经过 strict 校验（失败则强制走检索）
+    RUNTIME_MEMORY_STRICT_GATE_ENABLED = env_bool(
+        "RUNTIME_MEMORY_STRICT_GATE_ENABLED",
+        True,
+    )
+    # 证据表（evidence_table）抽取开关：默认关闭，避免结构化抽取噪声影响生成与校验
+    RUNTIME_ENABLE_EVIDENCE_TABLE = env_bool("RUNTIME_ENABLE_EVIDENCE_TABLE", False)
+    # compose 是否使用全部检索结果作为上下文（不按 top-k 裁剪）
+    RUNTIME_COMPOSE_INCLUDE_ALL_RETRIEVED_CONTEXT = env_bool(
+        "RUNTIME_COMPOSE_INCLUDE_ALL_RETRIEVED_CONTEXT",
+        False,
+    )
 
     # Steps log 截断，避免长会话膨胀
     MAX_STEPS_LOG = int(os.getenv("MAX_STEPS_LOG", 200))
@@ -55,6 +78,8 @@ class AppConfig:
     LLM_PROVIDER = os.getenv("DEFAULT_LLM_PROVIDER", "openai")
     EMBEDDING_PROVIDER = os.getenv("DEFAULT_EMBEDDING_PROVIDER", "openai")
     LLM_ROUTING_ENABLED = env_bool("LLM_ROUTING_ENABLED", True)
+    # 为空时不强制；设置后会把所有任务路由到指定 provider（openai/anthropic/gemini/ollama）
+    LLM_FORCE_PROVIDER = os.getenv("LLM_FORCE_PROVIDER", "").strip().lower()
 
     # OpenAI
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -62,6 +87,7 @@ class AppConfig:
     OPENAI_COMPOSE_MODEL = os.getenv("OPENAI_COMPOSE_MODEL", OPENAI_CHAT_MODEL)
     OPENAI_VERIFY_MODEL = os.getenv("OPENAI_VERIFY_MODEL", "gpt-4o-mini")
     OPENAI_REWRITE_MODEL = os.getenv("OPENAI_REWRITE_MODEL", "gpt-4o-mini")
+    OPENAI_MEMORY_MODEL = os.getenv("OPENAI_MEMORY_MODEL", OPENAI_VERIFY_MODEL)
     OPENAI_EMBED_MODEL = os.getenv(
         "OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
     )
@@ -75,6 +101,9 @@ class AppConfig:
         "ANTHROPIC_COMPOSE_MODEL",
         "claude-sonnet-4-20250514",
     )
+    ANTHROPIC_CHAT_MODEL = os.getenv("ANTHROPIC_CHAT_MODEL", ANTHROPIC_COMPOSE_MODEL)
+    ANTHROPIC_VERIFY_MODEL = os.getenv("ANTHROPIC_VERIFY_MODEL", ANTHROPIC_COMPOSE_MODEL)
+    ANTHROPIC_REWRITE_MODEL = os.getenv("ANTHROPIC_REWRITE_MODEL", ANTHROPIC_COMPOSE_MODEL)
     ANTHROPIC_MEMORY_MODEL = os.getenv(
         "ANTHROPIC_MEMORY_MODEL",
         "claude-3-haiku-20240307",
@@ -82,6 +111,21 @@ class AppConfig:
     ANTHROPIC_TEMPERATURE = float(os.getenv("ANTHROPIC_TEMPERATURE", "0"))
     ANTHROPIC_TIMEOUT_SECONDS = int(os.getenv("ANTHROPIC_TIMEOUT_SECONDS", 60))
     ANTHROPIC_MAX_RETRIES = int(os.getenv("ANTHROPIC_MAX_RETRIES", 2))
+
+    # Gemini
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    GEMINI_CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
+    GEMINI_COMPOSE_MODEL = os.getenv("GEMINI_COMPOSE_MODEL", GEMINI_CHAT_MODEL)
+    GEMINI_VERIFY_MODEL = os.getenv("GEMINI_VERIFY_MODEL", GEMINI_CHAT_MODEL)
+    GEMINI_REWRITE_MODEL = os.getenv("GEMINI_REWRITE_MODEL", GEMINI_CHAT_MODEL)
+    GEMINI_MEMORY_MODEL = os.getenv("GEMINI_MEMORY_MODEL", GEMINI_CHAT_MODEL)
+    GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0"))
+    GEMINI_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", 60))
+    GEMINI_MAX_RETRIES = int(os.getenv("GEMINI_MAX_RETRIES", 0))
+    # 免费层常见 5 RPM 限额；默认按 12.5s 节流，避免 429 触发。
+    GEMINI_MIN_CALL_INTERVAL_SECONDS = float(
+        os.getenv("GEMINI_MIN_CALL_INTERVAL_SECONDS", "12.5")
+    )
 
     # Ollama
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -120,6 +164,13 @@ class AppConfig:
 
     EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 1536))
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 2200))
+    TABLE_CHUNK_WINDOW_ROWS = int(os.getenv("TABLE_CHUNK_WINDOW_ROWS", 10))
+    TABLE_CHUNK_EMIT_WINDOW = env_bool("TABLE_CHUNK_EMIT_WINDOW", True)
+    TABLE_CHUNK_EMIT_ROW_FACTS = env_bool("TABLE_CHUNK_EMIT_ROW_FACTS", True)
+    TABLE_CHUNK_EMIT_RAW = env_bool("TABLE_CHUNK_EMIT_RAW", True)
+    # true 时优先仅保留 row-fact 文本 chunk，不保留原始/窗口表格结构
+    TABLE_CHUNK_ROW_FACT_ONLY = env_bool("TABLE_CHUNK_ROW_FACT_ONLY", False)
+    TABLE_CHUNK_MAX_ROW_FACTS = int(os.getenv("TABLE_CHUNK_MAX_ROW_FACTS", 160))
     # Milvus index/search knobs
     MILVUS_INDEX_METRIC_TYPE = os.getenv("MILVUS_INDEX_METRIC_TYPE", "COSINE")
     MILVUS_INDEX_TYPE = os.getenv("MILVUS_INDEX_TYPE", "HNSW")
@@ -155,6 +206,46 @@ class AppConfig:
     PHASE1_VECTOR_TOP_K = int(os.getenv("PHASE1_VECTOR_TOP_K", 50))
     PHASE1_KEYWORD_TOP_K = int(os.getenv("PHASE1_KEYWORD_TOP_K", 70))
     PHASE1_RERANK_TOP_N = int(os.getenv("PHASE1_RERANK_TOP_N", 28))
+    # multi-query retrieval (MVP): decompose comparative question into several focused queries
+    RETRIEVAL_MULTI_QUERY_ENABLED = env_bool("RETRIEVAL_MULTI_QUERY_ENABLED", False)
+    RETRIEVAL_MULTI_QUERY_MAX_QUERIES = int(os.getenv("RETRIEVAL_MULTI_QUERY_MAX_QUERIES", 4))
+    RETRIEVAL_MULTI_QUERY_PARALLEL_WORKERS = int(
+        os.getenv("RETRIEVAL_MULTI_QUERY_PARALLEL_WORKERS", 4)
+    )
+    PHASE1_PER_QUERY_VECTOR_TOP_K = int(os.getenv("PHASE1_PER_QUERY_VECTOR_TOP_K", 80))
+    PHASE1_PER_QUERY_KEYWORD_TOP_K = int(os.getenv("PHASE1_PER_QUERY_KEYWORD_TOP_K", 100))
+    PHASE1_PER_QUERY_KEEP_TOP_M = int(os.getenv("PHASE1_PER_QUERY_KEEP_TOP_M", 90))
+    RETRIEVAL_MULTI_QUERY_COVERAGE_WEIGHT = float(
+        os.getenv("RETRIEVAL_MULTI_QUERY_COVERAGE_WEIGHT", "0.18")
+    )
+    RETRIEVAL_MULTI_QUERY_RERANK_COVERAGE_WEIGHT = float(
+        os.getenv("RETRIEVAL_MULTI_QUERY_RERANK_COVERAGE_WEIGHT", "0.16")
+    )
+    RETRIEVAL_MULTI_QUERY_RERANK_PRIOR_WEIGHT = float(
+        os.getenv("RETRIEVAL_MULTI_QUERY_RERANK_PRIOR_WEIGHT", "0.80")
+    )
+    RETRIEVAL_MULTI_QUERY_RERANK_ROUTE_RANK_WEIGHT = float(
+        os.getenv("RETRIEVAL_MULTI_QUERY_RERANK_ROUTE_RANK_WEIGHT", "0.38")
+    )
+    RETRIEVAL_MULTI_QUERY_RERANK_ROUTE_RANK_WINDOW = int(
+        os.getenv("RETRIEVAL_MULTI_QUERY_RERANK_ROUTE_RANK_WINDOW", 24)
+    )
+    RETRIEVAL_MULTI_QUERY_ROUTE_TOP_K = int(
+        os.getenv("RETRIEVAL_MULTI_QUERY_ROUTE_TOP_K", 24)
+    )
+    RETRIEVAL_ROUTE_ENTITY_MATCH_BONUS = float(
+        os.getenv("RETRIEVAL_ROUTE_ENTITY_MATCH_BONUS", "0.10")
+    )
+    RETRIEVAL_ROUTE_ENTITY_MISMATCH_PENALTY = float(
+        os.getenv("RETRIEVAL_ROUTE_ENTITY_MISMATCH_PENALTY", "0.42")
+    )
+    RETRIEVAL_ROUTE_METRIC_SCOPE_PENALTY = float(
+        os.getenv("RETRIEVAL_ROUTE_METRIC_SCOPE_PENALTY", "0.16")
+    )
+    # compose context 中每个子 query 预留的候选条数（建议 2~3，默认 3）
+    RETRIEVAL_MULTI_QUERY_CONTEXT_TOP_K = int(
+        os.getenv("RETRIEVAL_MULTI_QUERY_CONTEXT_TOP_K", 8)
+    )
     PHASE2_VECTOR_TOP_K = int(os.getenv("PHASE2_VECTOR_TOP_K", 120))
     PHASE2_KEYWORD_TOP_K = int(os.getenv("PHASE2_KEYWORD_TOP_K", 140))
     PHASE2_RERANK_TOP_N = int(os.getenv("PHASE2_RERANK_TOP_N", 50))
@@ -197,6 +288,8 @@ class AppConfig:
     LTM_IMPORTANCE_THRESHOLD = float(
         os.getenv("LTM_IMPORTANCE_THRESHOLD", "0.7")
     )
+    # 暂停 LTM 写入（仅 recall，不写入新记忆）
+    LTM_WRITE_ENABLED = env_bool("LTM_WRITE_ENABLED", False)
 
     # === 5. 短期记忆 (STM) ===
     MEMORY_N_CHUNK = int(os.getenv("MEMORY_N_CHUNK", 5))

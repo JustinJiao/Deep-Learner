@@ -1,7 +1,9 @@
 import time
 
+from config.settings import AppConfig
 from core.llm_call import run_prompt
 from core.state import AgentState, StepLog
+from llm.prompts.base import PromptContractError
 from llm.prompts.compose_memory_draft import ComposeMemoryDraftPrompt
 from nodes.log_utils import clip_text, preview_messages
 
@@ -32,21 +34,50 @@ def _has_memory_signal(state: AgentState) -> bool:
     return len(recent_messages) > 0
 
 
+def _apply_memory_fallback(state: AgentState) -> None:
+    state["draft_answer"] = "记忆证据不足，需检索外部文档。"
+    state["draft_confidence"] = 0.0
+    state["used_memory_chunks"] = 0
+
+
 def compose_memory_draft_node(state: AgentState) -> AgentState:
     shortcut_no_memory = not _has_memory_signal(state)
     effective_query = str(state.get("resolved_query") or state.get("query", "")).strip()
     prompt_state: AgentState = dict(state)
     prompt_state["query"] = effective_query
+    llm_attempts = 0
+    llm_error = ""
+    used_fallback = False
 
     if shortcut_no_memory:
-        state["draft_answer"] = "记忆证据不足，需检索外部文档。"
-        state["draft_confidence"] = 0.0
-        state["used_memory_chunks"] = 0
+        _apply_memory_fallback(state)
     else:
-        out = run_prompt(ComposeMemoryDraftPrompt, prompt_state)
-        state["draft_answer"] = str(out.get("draft_answer", "")).strip()
-        state["draft_confidence"] = _clamp_confidence(out.get("confidence", 0.0))
-        state["used_memory_chunks"] = _normalize_used_chunks(out.get("used_memory_chunks", 0))
+        max_retries = max(0, int(AppConfig.RUNTIME_MEMORY_DRAFT_MAX_RETRIES))
+        total_attempts = 1 + max_retries
+        out: dict | None = None
+
+        for attempt in range(1, total_attempts + 1):
+            llm_attempts = attempt
+            try:
+                out = run_prompt(ComposeMemoryDraftPrompt, prompt_state)
+                break
+            except PromptContractError as e:
+                llm_error = f"{type(e).__name__}: {e}"
+                if attempt >= total_attempts:
+                    used_fallback = True
+            except Exception as e:  # pragma: no cover
+                # memory draft 失败不应打断主流程，直接降级到检索路径
+                llm_error = f"{type(e).__name__}: {e}"
+                used_fallback = True
+                break
+
+        if out is None:
+            _apply_memory_fallback(state)
+            used_fallback = True
+        else:
+            state["draft_answer"] = str(out.get("draft_answer", "")).strip()
+            state["draft_confidence"] = _clamp_confidence(out.get("confidence", 0.0))
+            state["used_memory_chunks"] = _normalize_used_chunks(out.get("used_memory_chunks", 0))
 
     state.setdefault("steps_log", []).append(
         StepLog(
@@ -66,6 +97,9 @@ def compose_memory_draft_node(state: AgentState) -> AgentState:
                     "draft_confidence": state.get("draft_confidence", 0.0),
                     "used_memory_chunks": state.get("used_memory_chunks", 0),
                     "shortcut_no_memory": shortcut_no_memory,
+                    "llm_attempts": llm_attempts,
+                    "used_fallback": used_fallback,
+                    "llm_error_preview": clip_text(llm_error, 220),
                 },
             },
             timestamp=time.time(),

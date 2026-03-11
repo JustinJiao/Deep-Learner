@@ -19,6 +19,7 @@ ALLOWED_FAILURE_TYPES = {
 _TRIGGER_TO_FAILURE_TYPE = {
     "citation_missing": "CITATION_MISMATCH",
     "citation_fabricated": "CITATION_MISMATCH",
+    "citation_not_in_context": "CITATION_MISMATCH",
     "unsupported_claim": "LOGICAL_ERROR",
     "logic_contradiction": "LOGICAL_ERROR",
     "citation_score_too_low": "CITATION_MISMATCH",
@@ -26,6 +27,8 @@ _TRIGGER_TO_FAILURE_TYPE = {
     "logic_score_too_low": "LOGICAL_ERROR",
     "total_score_below_threshold": "LOGICAL_ERROR",
     "insufficient_evidence_missing_company": "INSUFFICIENT_EVIDENCE",
+    "numeric_year_value_mismatch": "LOGICAL_ERROR",
+    "numeric_claim_not_in_citation": "CITATION_MISMATCH",
 }
 
 _MISSING_EVIDENCE_PATTERN = re.compile(
@@ -48,6 +51,369 @@ _MULTI_COMPANY_MARKERS = (
     "these companies",
     "three companies",
 )
+
+_COMPANY_ALIASES: dict[str, tuple[str, ...]] = {
+    "Amazon": ("amazon", "aws"),
+    "Microsoft": ("microsoft", "msft"),
+    "Alphabet": ("alphabet", "google", "google cloud"),
+}
+
+_YEAR_RE = re.compile(r"\b(20\d{2})\b")
+_NUMBER_RE = re.compile(r"\$?\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?|\$?\s*\d+(?:\.\d+)?")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?。！？])\s+|\n+")
+
+
+def _target_year(query: str, resolved_query: str) -> int | None:
+    for text in (resolved_query, query):
+        years = [int(y) for y in _YEAR_RE.findall(str(text or ""))]
+        if years:
+            return max(years)
+    return None
+
+
+def _parse_number(raw: str) -> float | None:
+    text = str(raw or "").strip().replace("$", "").replace(",", "")
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _number_to_million(value: float, unit_hint: str) -> float:
+    lowered = str(unit_hint or "").lower()
+    if "billion" in lowered:
+        return float(value) * 1000.0
+    if "million" in lowered:
+        return float(value)
+    return float(value)
+
+
+def _is_financial_number_token(token: str, unit_hint_window: str) -> bool:
+    t = str(token or "")
+    window = str(unit_hint_window or "").lower()
+    if "$" in t:
+        return True
+    if "," in t:
+        return True
+    if "." in t:
+        return True
+    if "million" in window or "billion" in window:
+        return True
+    return False
+
+
+def _extract_response_company_values_million(response: str) -> dict[str, list[float]]:
+    mentions: dict[str, list[float]] = {}
+    for sentence in _SENTENCE_SPLIT_RE.split(str(response or "")):
+        sent = str(sentence or "").strip()
+        if not sent:
+            continue
+        lowered = sent.lower()
+        companies = [
+            company
+            for company, aliases in _COMPANY_ALIASES.items()
+            if any(alias in lowered for alias in aliases)
+        ]
+        if not companies:
+            continue
+
+        for match in _NUMBER_RE.finditer(sent):
+            token = str(match.group(0) or "").strip()
+            if not token:
+                continue
+
+            end = int(match.end())
+            if end < len(sent) and sent[end:end + 1] == "%":
+                continue
+
+            numeric = _parse_number(token)
+            if numeric is None:
+                continue
+
+            # Skip likely year mentions.
+            if 1900.0 <= numeric <= 2100.0 and "," not in token and "." not in token:
+                continue
+
+            window = sent[max(0, match.start() - 24): min(len(sent), match.end() + 24)].lower()
+            if not _is_financial_number_token(token=token, unit_hint_window=window):
+                continue
+            value_million = _number_to_million(numeric, unit_hint=window)
+            for company in companies:
+                mentions.setdefault(company, []).append(value_million)
+    return mentions
+
+
+def _extract_numeric_values_million(text: str) -> list[float]:
+    values: list[float] = []
+    for match in _NUMBER_RE.finditer(str(text or "")):
+        token = str(match.group(0) or "").strip()
+        if not token:
+            continue
+
+        end = int(match.end())
+        src = str(text or "")
+        if end < len(src) and src[end:end + 1] == "%":
+            continue
+
+        numeric = _parse_number(token)
+        if numeric is None:
+            continue
+
+        # Skip likely year mentions.
+        if 1900.0 <= numeric <= 2100.0 and "," not in token and "." not in token:
+            continue
+
+        window = src[max(0, match.start() - 24): min(len(src), match.end() + 24)].lower()
+        if not _is_financial_number_token(token=token, unit_hint_window=window):
+            continue
+        values.append(_number_to_million(numeric, unit_hint=window))
+    return values
+
+
+def _extract_citation_company_numeric_support(
+    citations: list[dict],
+    context_pool: list[dict],
+) -> dict[str, dict[str, Any]]:
+    by_company: dict[str, dict[str, Any]] = {}
+    id_to_doc: dict[str, dict] = {}
+    for doc in context_pool:
+        doc_id = str(doc.get("id", "")).strip()
+        if doc_id:
+            id_to_doc[doc_id] = doc
+
+    for citation in citations:
+        c = citation or {}
+        quote = str(c.get("quote", "") or "")
+        title = str(c.get("title", "") or "")
+        citation_id = str(c.get("id", "") or "")
+        doc_content = str((id_to_doc.get(citation_id, {}) or {}).get("content", "") or "")
+        local_support_text = quote
+        if quote and doc_content:
+            idx = doc_content.lower().find(str(quote).lower())
+            if idx >= 0:
+                start = max(0, idx - 240)
+                end = min(len(doc_content), idx + len(quote) + 240)
+                local_support_text = f"{quote}\n{doc_content[start:end]}"
+            else:
+                local_support_text = quote
+
+        companies = _companies_from_text(" ".join([title, citation_id, local_support_text[:360]]))
+        if not companies:
+            continue
+
+        values = _extract_numeric_values_million(local_support_text)
+        years = {int(y) for y in _YEAR_RE.findall(local_support_text)}
+        if not values:
+            continue
+
+        for company in companies:
+            entry = by_company.setdefault(company, {"values": [], "years": set()})
+            entry["values"].extend(values)
+            entry["years"].update(years)
+    return by_company
+
+
+def _detect_numeric_claim_citation_mismatch(
+    query: str,
+    resolved_query: str,
+    response: str,
+    citations: list[dict],
+    context_pool: list[dict],
+) -> list[str]:
+    target_year = _target_year(query=query, resolved_query=resolved_query)
+    response_by_company = _extract_response_company_values_million(response=response)
+    if not response_by_company:
+        return []
+
+    citation_by_company = _extract_citation_company_numeric_support(
+        citations=citations,
+        context_pool=context_pool,
+    )
+    mismatches: list[str] = []
+    for company, response_values in response_by_company.items():
+        support = citation_by_company.get(company, {})
+        citation_values = list(support.get("values", []) or [])
+        citation_years = {int(y) for y in (support.get("years", set()) or set()) if 2000 <= int(y) <= 2099}
+        if not citation_values:
+            response_preview = ", ".join(f"{v:.3f}" for v in response_values[:3])
+            mismatches.append(
+                f"{company} response_values=[{response_preview}] but citation_has_no_numeric_value"
+            )
+            continue
+
+        if target_year is not None and citation_years and target_year not in citation_years:
+            mismatches.append(
+                f"{company} citation_years={sorted(citation_years)} missing_target_year={target_year}"
+            )
+            continue
+
+        matched = any(
+            _value_close(actual, expected)
+            for actual in response_values
+            for expected in citation_values
+        )
+        if matched:
+            continue
+
+        response_preview = ", ".join(f"{v:.3f}" for v in response_values[:3])
+        citation_preview = ", ".join(f"{v:.3f}" for v in citation_values[:3])
+        mismatches.append(
+            f"{company} response_values=[{response_preview}] "
+            f"but citation_values=[{citation_preview}]"
+        )
+    return mismatches
+
+
+def _extract_evidence_expected_values_million(
+    evidence_table: list[dict],
+    target_year: int | None,
+) -> dict[str, list[float]]:
+    expected: dict[str, list[float]] = {}
+    for row in evidence_table:
+        if not isinstance(row, dict):
+            continue
+        company = _canonical_company(str(row.get("company", "")))
+        if not company:
+            continue
+
+        row_year = _normalize_evidence_year(row.get("fiscal_year"))
+        if target_year is not None and row_year != target_year:
+            continue
+
+        numeric = _parse_number(str(row.get("value", "")))
+        if numeric is None:
+            continue
+        value_million = _number_to_million(numeric, unit_hint=str(row.get("unit", "")))
+        expected.setdefault(company, []).append(value_million)
+    return expected
+
+
+def _normalize_evidence_year(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value if 2000 <= value <= 2099 else None
+    years = _YEAR_RE.findall(str(value or ""))
+    if not years:
+        return None
+    try:
+        year = int(years[-1])
+    except ValueError:
+        return None
+    return year if 2000 <= year <= 2099 else None
+
+
+def _canonical_company(text: str) -> str:
+    lowered = str(text or "").strip().lower()
+    if not lowered:
+        return ""
+    for alias, company in _COMPANY_ALIAS_MAP.items():
+        if alias in lowered:
+            return company
+    for company, aliases in _COMPANY_ALIASES.items():
+        if any(alias in lowered for alias in aliases):
+            return company
+    return str(text or "").strip()
+
+
+def _value_close(a: float, b: float) -> bool:
+    scale = max(abs(b), 1.0)
+    return abs(a - b) / scale <= 0.02
+
+
+def _detect_numeric_year_value_mismatch(
+    query: str,
+    resolved_query: str,
+    response: str,
+    evidence_table: list[dict],
+) -> list[str]:
+    year = _target_year(query=query, resolved_query=resolved_query)
+    if year is None:
+        return []
+
+    expected_by_company = _extract_evidence_expected_values_million(
+        evidence_table=evidence_table,
+        target_year=year,
+    )
+    if not expected_by_company:
+        return []
+
+    response_by_company = _extract_response_company_values_million(response=response)
+    mismatches: list[str] = []
+    for company, expected_values in expected_by_company.items():
+        actual_values = response_by_company.get(company, [])
+        if not actual_values:
+            continue
+        matched = any(
+            _value_close(actual, expected)
+            for actual in actual_values
+            for expected in expected_values
+        )
+        if matched:
+            continue
+        expected_preview = ", ".join(f"{v:.3f}" for v in expected_values[:3])
+        actual_preview = ", ".join(f"{v:.3f}" for v in actual_values[:3])
+        mismatches.append(
+            f"{company}@{year} expected_million=[{expected_preview}] "
+            f"but_response=[{actual_preview}]"
+        )
+    return mismatches
+
+
+def _numeric_alignment_summary(
+    query: str,
+    resolved_query: str,
+    response: str,
+    evidence_table: list[dict],
+) -> dict[str, Any]:
+    year = _target_year(query=query, resolved_query=resolved_query)
+    expected_by_company = _extract_evidence_expected_values_million(
+        evidence_table=evidence_table,
+        target_year=year,
+    )
+    response_by_company = _extract_response_company_values_million(response=response)
+
+    mismatches: list[str] = []
+    matched_companies: set[str] = set()
+    missing_in_response: set[str] = set()
+    for company, expected_values in expected_by_company.items():
+        actual_values = response_by_company.get(company, [])
+        if not actual_values:
+            missing_in_response.add(company)
+            continue
+
+        matched = any(
+            _value_close(actual, expected)
+            for actual in actual_values
+            for expected in expected_values
+        )
+        if matched:
+            matched_companies.add(company)
+            continue
+
+        expected_preview = ", ".join(f"{v:.3f}" for v in expected_values[:3])
+        actual_preview = ", ".join(f"{v:.3f}" for v in actual_values[:3])
+        mismatches.append(
+            f"{company}@{year} expected_million=[{expected_preview}] "
+            f"but_response=[{actual_preview}]"
+        )
+
+    strong_alignment = bool(
+        expected_by_company
+        and not mismatches
+        and not missing_in_response
+        and matched_companies == set(expected_by_company.keys())
+    )
+    return {
+        "year": year,
+        "expected_by_company": expected_by_company,
+        "matched_companies": matched_companies,
+        "missing_in_response": missing_in_response,
+        "mismatches": mismatches,
+        "strong_alignment": strong_alignment,
+    }
 
 
 def _clamp_score_0_5(value: object, default: float = 0.0) -> float:
@@ -299,12 +665,25 @@ def _missing_company_coverage(
     return required - cited
 
 
+def _missing_citation_ids(
+    citations: list[dict],
+    context_pool: list[dict],
+) -> list[str]:
+    context_ids = {str(doc.get("id", "")).strip() for doc in context_pool if str(doc.get("id", "")).strip()}
+    missing: set[str] = set()
+    for citation in citations:
+        citation_id = str((citation or {}).get("id", "")).strip()
+        if not citation_id or citation_id not in context_ids:
+            missing.add(citation_id or "<empty-id>")
+    return sorted(missing)
+
+
 def _decide_strict_action(
     metrics: dict[str, Any],
     total_score: float,
 ) -> tuple[str, str, str]:
     # 第一层：致命布尔拦截
-    if bool(metrics["citation"]["missing"]):
+    if bool(metrics["citation"]["missing"]) and bool(AppConfig.SV_BLOCK_CITATION_MISSING):
         trigger = "citation_missing"
         return ("REPAIR", trigger, _normalize_failure_type(_TRIGGER_TO_FAILURE_TYPE[trigger]))
     if bool(metrics["citation"]["fabricated"]):
@@ -349,18 +728,34 @@ def strict_verify_node(state: AgentState) -> AgentState:
     out = run_prompt(StrictVerifyPrompt, prompt_state)
 
     metrics = _normalize_metrics(out)
+    deterministic_notes: list[str] = []
+
+    # Optional relaxation: if system already has non-empty citations, do not treat
+    # model-side "citation.missing=true" as a hard blocker.
+    if bool(metrics["citation"]["missing"]) and bool(
+        AppConfig.SV_ALLOW_NONEMPTY_CITATIONS_OVERRIDE_MISSING
+    ):
+        if len(state.get("citations", []) or []) > 0:
+            metrics["citation"]["missing"] = False
+            metrics["citation"]["score"] = max(float(metrics["citation"]["score"]), 2.0)
+            deterministic_notes.append("override_citation_missing_by_nonempty_citations")
+
+    alignment = _numeric_alignment_summary(
+        query=str(state.get("query", "")),
+        resolved_query=str(state.get("resolved_query", "")),
+        response=str(state.get("response", "")),
+        evidence_table=state.get("evidence_table", []) or [],
+    )
+    if bool(metrics["logic"]["contradiction"]) and bool(alignment.get("strong_alignment")):
+        # Deterministic numeric alignment proves no cross-company/year contradiction.
+        metrics["logic"]["contradiction"] = False
+        metrics["logic"]["score"] = max(float(metrics["logic"]["score"]), 3.0)
+        deterministic_notes.append("override_logic_contradiction_by_numeric_alignment")
+
     total_score = _weighted_total_score(metrics)
     missing_entities = _extract_missing_entities(str(state.get("response", "")))
-    missing_company_coverage = _missing_company_coverage(
-        query=str(state.get("query", "")),
-        context_pool=full_context_pool,
-        citations=state.get("citations", []) or [],
-    )
-    if missing_company_coverage:
-        strict_action = "REPAIR"
-        repair_trigger = "insufficient_evidence_missing_company"
-        failure_type = "INSUFFICIENT_EVIDENCE"
-    elif missing_entities:
+    missing_company_coverage: set[str] = set()
+    if missing_entities:
         strict_action = "REPAIR"
         repair_trigger = "insufficient_evidence_missing_company"
         failure_type = "INSUFFICIENT_EVIDENCE"
@@ -368,6 +763,54 @@ def strict_verify_node(state: AgentState) -> AgentState:
         strict_action, repair_trigger, failure_type = _decide_strict_action(
             metrics,
             total_score,
+        )
+
+    missing_citation_ids = _missing_citation_ids(
+        citations=state.get("citations", []) or [],
+        context_pool=full_context_pool,
+    )
+    if missing_citation_ids:
+        deterministic_notes.append(
+            f"missing_citation_ids={', '.join(missing_citation_ids[:6])}"
+        )
+        if bool(AppConfig.SV_BLOCK_CITATION_NOT_IN_CONTEXT):
+            strict_action = "REPAIR"
+            repair_trigger = "citation_not_in_context"
+            failure_type = _normalize_failure_type(_TRIGGER_TO_FAILURE_TYPE[repair_trigger])
+
+    numeric_mismatches = list(alignment.get("mismatches", []) or [])
+    if numeric_mismatches:
+        strict_action = "REPAIR"
+        repair_trigger = "numeric_year_value_mismatch"
+        failure_type = _normalize_failure_type(_TRIGGER_TO_FAILURE_TYPE[repair_trigger])
+        deterministic_notes.append(
+            "numeric_year_value_mismatch=" + " | ".join(numeric_mismatches[:3])
+        )
+
+    numeric_citation_mismatches = _detect_numeric_claim_citation_mismatch(
+        query=str(state.get("query", "")),
+        resolved_query=str(state.get("resolved_query", "")),
+        response=str(state.get("response", "")),
+        citations=state.get("citations", []) or [],
+        context_pool=full_context_pool,
+    )
+    if numeric_citation_mismatches and repair_trigger != "numeric_year_value_mismatch":
+        min_mismatch_count = max(1, int(AppConfig.SV_NUMERIC_CITATION_MISMATCH_MIN_COUNT))
+        if len(numeric_citation_mismatches) >= min_mismatch_count:
+            strict_action = "REPAIR"
+            repair_trigger = "numeric_claim_not_in_citation"
+            failure_type = _normalize_failure_type(_TRIGGER_TO_FAILURE_TYPE[repair_trigger])
+            deterministic_notes.append(
+                "numeric_claim_not_in_citation=" + " | ".join(numeric_citation_mismatches[:3])
+            )
+        else:
+            deterministic_notes.append(
+                f"numeric_claim_not_in_citation_tolerated(count={len(numeric_citation_mismatches)}<{min_mismatch_count})"
+            )
+    missing_numeric_companies = sorted(alignment.get("missing_in_response", set()) or set())
+    if missing_numeric_companies:
+        deterministic_notes.append(
+            "numeric_expected_but_missing_in_response=" + ", ".join(missing_numeric_companies[:6])
         )
 
     if failure_type == "CITATION_MISMATCH" and (missing_entities or missing_company_coverage):
@@ -388,6 +831,8 @@ def strict_verify_node(state: AgentState) -> AgentState:
         reason += f"; missing_entities={', '.join(sorted(missing_entities))}"
     if missing_company_coverage:
         reason += f"; missing_company_coverage={', '.join(sorted(missing_company_coverage))}"
+    if deterministic_notes:
+        reason += f"; deterministic={' | '.join(deterministic_notes)}"
 
     state["strict_verdict"] = verdict
     state["strict_score"] = strict_score
@@ -429,6 +874,7 @@ def strict_verify_node(state: AgentState) -> AgentState:
                     "score_threshold": float(AppConfig.SV_TOTAL_THRESHOLD),
                     "repair_trigger": repair_trigger,
                     "failure_type": failure_type if verdict == "FAIL" else "",
+                    "deterministic_notes": deterministic_notes,
                     "reason_preview": clip_text(reason, 220),
                 },
             },

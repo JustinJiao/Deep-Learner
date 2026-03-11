@@ -29,6 +29,7 @@ from nodes.degrade_or_abstain import degrade_or_abstain_node
 from nodes.retrieve_phase2 import retrieve_phase2_node
 from nodes.rerank_phase2 import rerank_phase2_node
 from nodes.set_repair_mode import set_repair_mode_node
+from nodes.extract_route_facts import extract_route_facts_node
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,7 @@ NODE_REGISTRY: dict[str, Callable[..., Any]] = {
     "verify_memory": verify_memory_node,
     "retrieve_phase1": retrieve_phase1_node,
     "rerank_phase1": rerank_phase1_node,
+    "extract_route_facts": extract_route_facts_node,
     "compose_with_context": compose_with_context_node,
     "strict_verify": strict_verify_node,
     "degrade_or_abstain": degrade_or_abstain_node,
@@ -154,14 +156,14 @@ NODE_CONTRACTS: dict[str, NodeContract] = {
     # Runtime V2 contracts
     "resolve_query_reference": NodeContract(
         name="resolve_query_reference",
-        reads={"query", "short_term_memory", "recent_messages"},
+        reads={"query", "short_term_memory", "recent_messages", "long_term_memory"},
         writes={"resolved_query", "steps_log"},
         llm_node=True,
     ),
     "rewrite_query_for_retrieval": NodeContract(
         name="rewrite_query_for_retrieval",
         reads={"query", "resolved_query", "short_term_memory", "recent_messages", "long_term_memory"},
-        writes={"retrieval_query", "steps_log"},
+        writes={"retrieval_query", "retrieval_queries", "steps_log"},
         llm_node=True,
     ),
     "ltm_recall": NodeContract(
@@ -177,19 +179,47 @@ NODE_CONTRACTS: dict[str, NodeContract] = {
     ),
     "verify_memory": NodeContract(
         name="verify_memory",
-        reads={"query", "draft_answer", "draft_confidence", "used_memory_chunks", "ltm_hits_count"},
+        reads={
+            "query",
+            "resolved_query",
+            "draft_answer",
+            "draft_confidence",
+            "used_memory_chunks",
+            "ltm_hits_count",
+            "short_term_memory",
+            "recent_messages",
+            "long_term_memory",
+        },
         writes={"memory_score", "memory_verdict", "memory_reason", "memory_risk_level", "steps_log"},
         llm_node=True,
     ),
     "retrieve_phase1": NodeContract(
         name="retrieve_phase1",
-        reads={"query", "resolved_query", "retrieval_query"},
-        writes={"phase1_candidates", "steps_log"},
+        reads={"query", "resolved_query", "retrieval_query", "retrieval_queries"},
+        writes={"phase1_candidates", "phase1_query_routes", "steps_log"},
     ),
     "rerank_phase1": NodeContract(
         name="rerank_phase1",
-        reads={"query", "phase1_candidates"},
-        writes={"phase1_candidates", "phase1_reranked", "context_pool", "context_source", "steps_log"},
+        reads={"query", "retrieval_query", "retrieval_queries", "phase1_candidates", "phase1_query_routes"},
+        writes={
+            "phase1_candidates",
+            "phase1_query_routes",
+            "phase1_reranked",
+            "context_pool",
+            "context_source",
+            "steps_log",
+        },
+    ),
+    "extract_route_facts": NodeContract(
+        name="extract_route_facts",
+        reads={
+            "query",
+            "resolved_query",
+            "retrieval_queries",
+            "phase1_query_routes",
+            "context_pool",
+        },
+        writes={"route_facts", "route_fact_coverage", "steps_log"},
     ),
     "compose_with_context": NodeContract(
         name="compose_with_context",
@@ -199,17 +229,21 @@ NODE_CONTRACTS: dict[str, NodeContract] = {
             "recent_messages",
             "long_term_memory",
             "context_pool",
+            "phase1_query_routes",
             "repair_mode",
             "failure_type",
             "strict_reason",
             "previous_response",
+            "evidence_table",
+            "route_facts",
+            "route_fact_coverage",
         },
-        writes={"response", "citations", "response_revision", "previous_response", "steps_log"},
+        writes={"response", "citations", "response_revision", "previous_response", "evidence_table", "steps_log"},
         llm_node=True,
     ),
     "strict_verify": NodeContract(
         name="strict_verify",
-        reads={"query", "response", "citations", "context_pool", "response_revision"},
+        reads={"query", "resolved_query", "response", "citations", "context_pool", "response_revision", "evidence_table"},
         writes={
             "strict_score",
             "strict_total_score",
@@ -227,7 +261,16 @@ NODE_CONTRACTS: dict[str, NodeContract] = {
     ),
     "degrade_or_abstain": NodeContract(
         name="degrade_or_abstain",
-        reads={"strict_reason", "failure_type", "repair_trigger"},
+        reads={
+            "strict_reason",
+            "failure_type",
+            "repair_trigger",
+            "response",
+            "previous_response",
+            "citations",
+            "route_facts",
+            "route_fact_coverage",
+        },
         writes={"response", "citations", "run_status", "strict_status", "steps_log"},
     ),
     "retrieve_phase2": NodeContract(

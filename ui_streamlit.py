@@ -6,6 +6,11 @@ from core.executor import AgentExecutor
 st.set_page_config(page_title="Deep-Learner", layout="wide")
 st.title("🧠 Deep-Learner 2.1")
 
+
+def _escape_latex_dollar(text: str) -> str:
+    # Streamlit markdown treats `$...$` as math; escape to keep plain-text currency display.
+    return str(text or "").replace("$", r"\$")
+
 # Session 初始化
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
@@ -31,7 +36,7 @@ with st.sidebar:
 # 显示历史消息
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+        st.write(_escape_latex_dollar(msg["content"]))
 
 # 输入框
 if prompt := st.chat_input("Ask something..."):
@@ -42,7 +47,7 @@ if prompt := st.chat_input("Ask something..."):
     })
 
     with st.chat_message("user"):
-        st.write(prompt)
+        st.write(_escape_latex_dollar(prompt))
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
@@ -64,7 +69,7 @@ if prompt := st.chat_input("Ask something..."):
                 run_status = result.get("run_status", "")
                 steps_log = result.get("steps_log", [])
 
-            st.write(response)
+            st.write(_escape_latex_dollar(response))
 
             # ===== 引用显示 =====
             if citations:
@@ -77,11 +82,11 @@ if prompt := st.chat_input("Ask something..."):
                         st.write(f"Document ID: {c.get('id')}")
                         quote = str(c.get("quote", "") or "").strip()
                         if quote:
-                            st.caption(quote)
+                            st.caption(_escape_latex_dollar(quote))
 
     st.session_state.messages.append({
         "role": "assistant",
-        "content": response
+        "content": _escape_latex_dollar(response)
     })
 
     # Debug

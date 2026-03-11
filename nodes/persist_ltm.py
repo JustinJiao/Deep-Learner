@@ -22,6 +22,22 @@ def _to_float_score(value) -> float:
 
 
 def persist_ltm_node(state: AgentState) -> AgentState:
+    if not bool(AppConfig.LTM_WRITE_ENABLED):
+        state.setdefault("steps_log", []).append(
+            StepLog(
+                node="persist_ltm",
+                info={
+                    "state": {
+                        "persist_skipped": True,
+                        "reason": "LTM_WRITE_ENABLED=false",
+                        "query_preview": clip_text(state.get("query", ""), 160),
+                    },
+                },
+                timestamp=time.time(),
+            )
+        )
+        return state
+
     # 没有 response 就不抽取，避免污染
     if not state.get("response"):
         state.setdefault("steps_log", []).append(

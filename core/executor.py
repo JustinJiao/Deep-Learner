@@ -188,27 +188,32 @@ class AgentExecutor:
     def _run_v2_state_machine(self, state: AgentState) -> AgentState:
         try:
             state = self._execute_node(state, "stm_read")
+            # 先做一次 LTM 召回（基于原 query），给指代消解提供背景锚点。
+            state = self._execute_node(state, "ltm_recall")
             state = self._execute_node(state, "resolve_query_reference")
+            # 指代消解后再次召回，刷新下游 memory/retrieval 使用的长期记忆上下文。
             state = self._execute_node(state, "ltm_recall")
             state = self._execute_node(state, "compose_memory_draft")
             state = self._execute_node(state, "verify_memory")
 
             memory_sufficient = state.get("memory_verdict") == "SUFFICIENT"
             force_retrieve = bool(AppConfig.RUNTIME_FORCE_RETRIEVE_WHEN_MEMORY_SUFFICIENT)
-
             if memory_sufficient and not force_retrieve:
                 state["response"] = state.get("draft_answer", "")
                 state.setdefault("citations", [])
                 state["run_status"] = "ok"
                 _transition(state, "FINALIZE", reason="memory_verdict_sufficient")
             else:
-                phase1_reason = "memory_verdict_need_retrieve"
-                if memory_sufficient and force_retrieve:
-                    phase1_reason = "memory_verdict_sufficient_but_force_retrieve"
+                phase1_reason = (
+                    "memory_verdict_sufficient_but_force_retrieve"
+                    if memory_sufficient and force_retrieve
+                    else "memory_verdict_need_retrieve"
+                )
                 _transition(state, "PHASE1", reason=phase1_reason)
                 state = self._execute_node(state, "rewrite_query_for_retrieval")
                 state = self._execute_node(state, "retrieve_phase1")
                 state = self._execute_node(state, "rerank_phase1")
+                state = self._execute_node(state, "extract_route_facts")
                 state.setdefault("repair_mode", False)
                 state.setdefault("strict_reason", "")
                 state.setdefault("previous_response", state.get("response", ""))
@@ -235,6 +240,7 @@ class AgentExecutor:
                         )
                         state = self._execute_node(state, "retrieve_phase2")
                         state = self._execute_node(state, "rerank_phase2")
+                        state = self._execute_node(state, "extract_route_facts")
                         state.setdefault("repair_mode", False)
                         state.setdefault("strict_reason", "")
                         state.setdefault("previous_response", state.get("response", ""))
@@ -271,6 +277,7 @@ class AgentExecutor:
                                 reason=f"phase1_fail_{state.get('repair_trigger', '') or str(failure_type).lower()}",
                             )
                             state = self._execute_node(state, "set_repair_mode")
+                            state = self._execute_node(state, "extract_route_facts")
                             state.setdefault("previous_response", state.get("response", ""))
                             state = self._execute_node(state, "compose_with_context")
                             state = self._execute_node(state, "strict_verify")
@@ -311,8 +318,12 @@ class AgentExecutor:
 
     def _run_tail_nodes(self, state: AgentState) -> AgentState:
         should_persist = bool(state.get("response")) and state.get("run_status") in ("ok", "degraded")
+        ltm_write_enabled = bool(AppConfig.LTM_WRITE_ENABLED)
         for tail in ("finalize", "stm_write", "stm_summary", "persist_ltm"):
             if tail in ("stm_write", "stm_summary", "persist_ltm") and not should_persist:
+                continue
+            if tail == "persist_ltm" and not ltm_write_enabled:
+                _append_log(state, StepLog(node=tail, info="skipped: LTM_WRITE_ENABLED=false"))
                 continue
             try:
                 state = self._execute_node(state, tail)

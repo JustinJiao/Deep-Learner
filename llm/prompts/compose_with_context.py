@@ -4,10 +4,16 @@ from llm.prompts.base import PromptContract
 class ComposeWithContextPrompt(PromptContract):
     READS = [
         "query",
+        "resolved_query",
+        "retrieval_query",
+        "retrieval_queries",
         "short_term_memory",
         "recent_messages",
         "long_term_memory",
         "context_pool",
+        "evidence_table",
+        "route_facts",
+        "route_fact_coverage",
         "repair_mode",
         "strict_reason",
         "previous_response",
@@ -58,10 +64,43 @@ Project scope (must follow):
     - 必须优先修复 strict_reason 指出的问题
     - 若 previous_response 可局部修正，优先最小改动修正
 12. You are allowed to combine evidence from multiple chunks and multiple documents. Do not force single-chunk answers for multi-entity questions.
-13. For multi-company or multi-entity questions (for example, \"all three companies\", \"these companies\", \"all companies\", \"compare A/B/C\", or explicit lists), you must provide evidence coverage for each named company/entity. If company names are not explicit but the question clearly refers to multiple companies, infer the company set from context_pool sources and cover each one.
-14. For multi-company questions, citations must include at least one citation per covered company/source. If any company/source lacks evidence, provide a partial answer for covered companies first, then explicitly list missing company/source evidence.
-15. For generic multi-company wording in this project (for example \"these companies\"), default target set is Amazon + Alphabet + Microsoft unless the user narrows scope.
-16. For single-company questions (for example only Amazon is named), answer only for that company unless the user explicitly asks for cross-company comparison.
+13. Do not apply hard-coded single-company or multi-company heuristics.
+    - Do not infer scope from alias tables or company-count rules.
+    - Determine answer scope from original query semantics and retrieved evidence only.
+14. If resolved query contains an explicit year/scope (for example fiscal year 2024), keep answer values aligned to that scope.
+    - For multi-year tables, map year and value from the same evidence quote.
+    - If year-value mapping is ambiguous in current chunks, say \"Uncertain\" for that part.
+15. Query understanding must combine all query views below:
+    - Original user query (source intent)
+    - Resolved query after reference/coreference normalization (disambiguated intent)
+    - Retrieval query / retrieval subqueries (evidence routing hints)
+16. Priority policy for final answering:
+    - The original user query is the authoritative target for what to answer.
+    - The resolved query is only for reference/coreference disambiguation; do not let it change the original question's scope, task type, or comparison target.
+    - Retrieval query and retrieval subqueries are retrieval hints only; they must not introduce new answer requirements.
+    - If wording conflicts appear, follow the original user query and explicitly mention uncertainty instead of silently switching task.
+17. When retrieval subqueries are provided (for example one per company), treat them as evidence coverage tasks:
+    - Try to ground each subquery with at least one relevant citation when evidence exists.
+    - Do not use one company's evidence to fill another company's number.
+18. Numeric evidence locking (important):
+    - For each company-level numeric claim, citation.quote should contain both metric anchor and value.
+    - Prefer quotes that explicitly include year + metric + value in one chunk.
+    - If year-value mapping is ambiguous, say \"Uncertain\" for that part instead of forcing a number.
+19. citation.quote must be directly copied from one context chunk. Do not synthesize merged quote text that is not explicitly present.
+20. If evidence_table is provided, treat it as the primary structured evidence view.
+    - Prefer numeric claims that can be matched to one evidence_table row.
+    - For explicit target year questions, do not use values from other years.
+21. If evidence_table contains a target-year row for a company/metric, do not answer with a conflicting value.
+    If conflict cannot be resolved, return "Uncertain" for that company.
+22. For each numeric company claim in response, keep the same company+metric+year scope as the supporting evidence row.
+23. If evidence_table rows provide different fiscal period end dates across companies, explicitly state those period-end differences in response.
+    - Example: Microsoft fiscal year ended June 30, 2024; Amazon/Alphabet values are from year ended December 31, 2024.
+24. Do not imply all companies share the same fiscal year-end cutoff unless evidence explicitly shows that.
+25. If compared metrics are not definition-identical across companies (for example a broad cloud metric vs a reportable segment metric),
+    add one short comparability caveat sentence grounded in citation wording.
+26. If the resolved query specifies a target year/scope (for example fiscal year 2024 or most recent fiscal year),
+    focus the final numeric answer on that target scope only.
+    - Do not add extra prior-year numbers unless the user explicitly asks for multi-year comparison.
 
 输出格式必须只输出 JSON：
 
@@ -103,8 +142,31 @@ repair_mode: {bool(state.get("repair_mode", False))}
 strict_reason: {state.get("strict_reason", "")}
 previous_response: {state.get("previous_response", "")}
 
-用户问题:
+Answering priority:
+1) Final answer target = original query
+2) resolved query = disambiguation reference only
+3) retrieval query/subqueries = retrieval hints only
+
+用户原始问题 (original query):
 {state.get("query", "")}
+
+指代消解后问题 (resolved query):
+{state.get("resolved_query", "")}
+
+检索主查询 (retrieval query):
+{state.get("retrieval_query", "")}
+
+检索子查询 (retrieval subqueries):
+{state.get("retrieval_queries", [])}
+
+结构化证据表 (evidence table):
+{state.get("evidence_table", [])}
+
+子查询结构化事实 (route facts):
+{state.get("route_facts", [])}
+
+子查询事实覆盖 (route fact coverage):
+{state.get("route_fact_coverage", {})}
 
 短期记忆:
 {state.get("short_term_memory", "")}

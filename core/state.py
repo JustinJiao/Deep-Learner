@@ -66,7 +66,9 @@ class AgentState(TypedDict, total=False):
     rewritten_query: str
     resolved_query: str
     retrieval_query: str
+    retrieval_queries: List[str]
     context_pool: List[Dict[str, Any]]
+    evidence_table: List[Dict[str, Any]]
 
     # 输出
     response: str
@@ -101,6 +103,9 @@ class AgentState(TypedDict, total=False):
     memory_reason: str
     memory_risk_level: Literal["LOW", "MEDIUM", "HIGH"]
     phase1_candidates: List[Dict[str, Any]]
+    phase1_query_routes: List[Dict[str, Any]]
+    route_facts: List[Dict[str, Any]]
+    route_fact_coverage: Dict[str, Any]
     phase1_reranked: List[Dict[str, Any]]
     phase2_candidates: List[Dict[str, Any]]
     phase2_reranked: List[Dict[str, Any]]
@@ -144,5 +149,9 @@ def build_initial_state(session_id: str, query: str) -> AgentState:
         "strict_confidence": 0.0,
         "repair_trigger": "",
         "citations": [],
+        "evidence_table": [],
         "repair_reason": "",
+        "phase1_query_routes": [],
+        "route_facts": [],
+        "route_fact_coverage": {},
     }
