@@ -1,4 +1,5 @@
 from core.executor import AgentExecutor
+from config.settings import AppConfig
 from session import store as session_store
 from tools.retrieve_tool.base import SearchResult
 
@@ -9,6 +10,7 @@ def _clear_session_store():
 
 def test_full_chain_happy_path_step_logs(monkeypatch):
     _clear_session_store()
+    monkeypatch.setattr(AppConfig, "LTM_WRITE_ENABLED", True)
 
     calls = {
         "retrieve": 0,
@@ -139,6 +141,7 @@ def test_full_chain_happy_path_step_logs(monkeypatch):
 
 def test_full_chain_repair_then_pass_step_logs(monkeypatch):
     _clear_session_store()
+    monkeypatch.setattr(AppConfig, "LTM_WRITE_ENABLED", True)
 
     calls = {
         "retrieve": 0,

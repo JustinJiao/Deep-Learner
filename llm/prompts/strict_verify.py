@@ -1,19 +1,18 @@
-from llm.prompts.base import PromptContract
+from llm .prompts .base import PromptContract 
 
 
-class StrictVerifyPrompt(PromptContract):
-    READS = ["query", "response", "citations", "context_pool"]
-    WRITES = [
-        "citation",
-        "hallucination",
-        "logic",
-        "completeness",
-        "format",
-        "confidence",
+class StrictVerifyPrompt (PromptContract ):
+    READS =["query","response","citations","context_pool"]
+    WRITES =[
+    "citation",
+    "hallucination",
+    "logic",
+    "completeness",
+    "format",
+    "confidence",
     ]
 
-    SYSTEM = """
-你是 Deep-Learner 的 strict_verify 评分器。你的职责是输出结构化评估，不做最终决策。
+    SYSTEM ="""You are Deep-Learner's strict_verify grader. Your role is to output a structured assessment and not to make final decisions.
 
 Language requirement:
 - Output must be English-only.
@@ -26,9 +25,9 @@ Project scope (must follow):
   3) MSFT 10-K.pdf
 - Treat any claim that cannot be supported by citations/context from these filings as unsupported.
 
-只允许输出 JSON，不要自然语言解释，不要多余字段。
+Only JSON output is allowed, no natural language interpretation, no redundant fields.
 
-请根据 query/response/citations/context_pool 输出以下结构：
+Please output the following structure according to query/response/citations/context_pool:
 {
   "citation": {
     "score": 0-5,
@@ -52,36 +51,35 @@ Project scope (must follow):
   "confidence": 0-1
 }
 
-评分口径：
-- citation.score：引用质量（相关性、可定位性、是否支撑结论）
-- hallucination.score：事实可靠性（是否有证据支撑）
-- logic.score：逻辑一致性（是否自洽、是否与证据矛盾）
-- completeness.score：是否回答完整
-- format.score：结构规范性
+Rating caliber:
+- citation.score: citation quality (relevance, positionability, whether it supports the conclusion)
+- hallucination.score: factual reliability (whether there is evidence to support it)
+- logic.score: logical consistency (whether it is self-consistent or inconsistent with evidence)
+- completeness.score: Whether the answer is complete
+- format.score: structural standardization
 
-布尔口径：
-- citation.missing：是否完全没有引用
-- citation.fabricated：是否存在编造来源/错引
-- hallucination.unsupported_claim：是否存在明显无依据断言
-- logic.contradiction：是否存在明显自相矛盾
+Boolean caliber:
+- citation.missing: Whether there is no citation at all
+- citation.fabricated: whether there are fabricated sources/miscitations
+- hallucination.unsupported_claim: Whether there is an obvious unsupported assertion
+- logic.contradiction: Is there any obvious contradiction?
 
-多公司口径（重要）：
-- If the question clearly asks about multiple companies (for example \"these companies\", \"all three\", or explicit company lists), a response that gives a cross-company conclusion without coverage for Amazon, Alphabet, and Microsoft should be penalized on completeness and hallucination.
+Multi-company caliber (important):
+- If the question clearly asks about multiple companies (for example "these companies", "all three", or explicit company lists), a response that gives a cross-company conclusion without coverage for Amazon, Alphabet, and Microsoft should be penalized on completeness and hallucination.
 - If one or more required companies are missing evidence/citations, prefer lower completeness and mark unsupported_claim=true when the response over-generalizes.
 - If the query asks for latest/most recent fiscal year, and context includes multi-year values for the same company/metric, using an earlier-year value as final latest-year answer should be treated as contradiction/unsupported.
 
-注意：
-- 分数必须是 0~5 的数字。
-- confidence 必须是 0~1 的数字。
-- 若无法完全判断，也必须给出上述 JSON 结构，不能省略字段。
-    """
+Note:
+- The score must be a number from 0 to 5.
+- confidence must be a number between 0 and 1.
+- If it cannot be determined completely, the above JSON structure must also be given, and fields cannot be omitted."""
 
-    def build_user_prompt(self, state):
-        docs = state.get("context_pool", []) or []
-        formatted_docs = ""
-        for i, d in enumerate(docs):
-            formatted_docs += f"""
-文档 {i + 1}
+    def build_user_prompt (self ,state ):
+        docs =state .get ("context_pool",[])or []
+        formatted_docs =""
+        for i ,d in enumerate (docs ):
+            formatted_docs +=f"""
+Document {i + 1}
 ID: {d.get('id', '')}
 Source: {d.get('source', d.get('title', ''))}
 Module: {d.get('module', 'General')}
@@ -91,11 +89,11 @@ Content:
 --------------------
 """
 
-        citations = state.get("citations", []) or []
-        formatted_citations = ""
-        for i, c in enumerate(citations):
-            formatted_citations += f"""
-引用 {i + 1}
+        citations =state .get ("citations",[])or []
+        formatted_citations =""
+        for i ,c in enumerate (citations ):
+            formatted_citations +=f"""
+Citation {i + 1}
 ID: {c.get('id', '')}
 Title: {c.get('title', '')}
 Score: {c.get('score', 0.0)}
@@ -105,15 +103,15 @@ Quote:
 """
 
         return f"""
-用户问题:
+User question:
 {state.get("query", "")}
 
-回答:
+Answer:
 {state.get("response", "")}
 
-引用:
+Citations:
 {formatted_citations}
 
-检索文档:
+Retrieved documents:
 {formatted_docs}
 """

@@ -1,15 +1,14 @@
 # llm/prompts/verify.py
 
-from llm.prompts.base import PromptContract
+from llm .prompts .base import PromptContract 
 
 
-class VerifyPrompt(PromptContract):
+class VerifyPrompt (PromptContract ):
 
-    READS = ["response", "context_pool"]
-    WRITES = ["score", "is_hallucination", "critique", "error_type", "next_step"]
+    READS =["response","context_pool"]
+    WRITES =["score","is_hallucination","critique","error_type","next_step"]
 
-    SYSTEM = """
-    检查回答是否基于检索文档。
+    SYSTEM ="""Check if the answer is based on the retrieved document.
     Language requirement:
     - Output must be English-only.
     - Keep JSON keys unchanged; JSON string values must be in English.
@@ -21,37 +20,36 @@ class VerifyPrompt(PromptContract):
       3) MSFT 10-K.pdf
     - Claims outside these filings should be treated as unsupported.
 
-    如果有问题，请分类错误类型：
+    If there is a problem, please classify the error type:
     - generation_error
-    - retrieval_insufficient
-    - query_misaligned
+    -retrieval_insufficient
+    -query_misaligned
 
-    并给出下一步：
+    And give the next step:
     - compose
-    - retrieve
-    - query_rewrite
+    -retrieve
+    -query_rewrite
 
-    输出规则（必须遵守）：
-    - score 为 0~1，分数越高表示回答越可靠、越可被证据支持。
-    - 当 score >= 0.68 时，is_hallucination 应为 false；否则应为 true。
-    - 当 is_hallucination = false 时，error_type 必须是空字符串，next_step 必须是空字符串。
-    - 当 is_hallucination = true 时，error_type 和 next_step 必须填写为上面的枚举值。
+    Output rules (must be followed):
+    - The score is 0~1. The higher the score, the more reliable the answer is and the more it can be supported by evidence.
+    - is_hallucination should be false when score >= 0.68; otherwise it should be true.
+    - When is_hallucination = false, error_type must be an empty string and next_step must be an empty string.
+    - When is_hallucination = true, error_type and next_step must be filled in with the above enumeration values.
 
-    返回 JSON:
+    Return JSON:
     {
       "score": 0.0,
       "is_hallucination": true/false,
       "critique": "...",
       "error_type": "...",
       "next_step": "..."
-    }
-    """
+    }"""
 
-    def build_user_prompt(self, state):
+    def build_user_prompt (self ,state ):
         return f"""
-回答:
+Answer:
 {state.get("response","")}
 
-检索文档:
+Retrieved documents:
 {state.get("context_pool",[])}
 """

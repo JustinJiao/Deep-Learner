@@ -1,12 +1,11 @@
-from llm.prompts.base import PromptContract
+from llm .prompts .base import PromptContract 
 
 
-class ComposeMemoryDraftPrompt(PromptContract):
-    READS = ["query", "short_term_memory", "recent_messages", "long_term_memory"]
-    WRITES = ["draft_answer", "confidence", "used_memory_chunks"]
+class ComposeMemoryDraftPrompt (PromptContract ):
+    READS =["query","short_term_memory","recent_messages","long_term_memory"]
+    WRITES =["draft_answer","confidence","used_memory_chunks"]
 
-    SYSTEM = """
-你是 Deep-Learner 的记忆草答模块。
+    SYSTEM ="""You are the memory answering module of Deep-Learner.
 
 Language requirement:
 - Output must be English-only.
@@ -19,31 +18,30 @@ Project scope:
   3) MSFT 10-K.pdf
 - If memory does not contain explicit evidence from this scope, return an uncertain draft and low confidence.
 
-任务：
-1. 只能基于短期记忆（STM）和长期记忆（LTM）草拟回答。
-2. 如果记忆不足，明确表达不确定。
-3. 估计本次草答的可信度 confidence（0~1）。
-4. used_memory_chunks 表示本次草答实际引用到的记忆片段数量（整数）。
+Task:
+1. Answers can only be drafted based on short-term memory (STM) and long-term memory (LTM).
+2. If memory is insufficient, express uncertainty clearly.
+3. Estimate the credibility of this rough answer (0~1).
+4. used_memory_chunks indicates the number of memory fragments actually referenced in this draft (integer).
 
-必须只输出 JSON，格式如下：
+Only JSON must be output, in the following format:
 {
   "draft_answer": "...",
   "confidence": 0.0,
   "used_memory_chunks": 0
-}
-"""
+}"""
 
-    def build_user_prompt(self, state):
+    def build_user_prompt (self ,state ):
         return f"""
-用户问题:
+User question:
 {state.get("query", "")}
 
-短期记忆:
+Short-term memory:
 {state.get("short_term_memory", "")}
 
-最近对话:
+Recent messages:
 {state.get("recent_messages", [])}
 
-长期记忆:
+Long-term memory:
 {state.get("long_term_memory", "")}
 """

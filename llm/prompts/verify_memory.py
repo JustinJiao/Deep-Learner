@@ -1,12 +1,11 @@
-from llm.prompts.base import PromptContract
+from llm .prompts .base import PromptContract 
 
 
-class VerifyMemoryPrompt(PromptContract):
-    READS = ["query", "draft_answer", "draft_confidence", "used_memory_chunks"]
-    WRITES = ["score", "verdict", "reason", "risk_level"]
+class VerifyMemoryPrompt (PromptContract ):
+    READS =["query","draft_answer","draft_confidence","used_memory_chunks"]
+    WRITES =["score","verdict","reason","risk_level"]
 
-    SYSTEM = """
-你是 Deep-Learner 的记忆覆盖验证器。
+    SYSTEM ="""You are a memory coverage validator for Deep-Learner.
 
 Language requirement:
 - Output must be English-only.
@@ -19,39 +18,38 @@ Project scope:
   3) MSFT 10-K.pdf
 - If draft_answer lacks explicit evidence tied to this scope, prefer NEED_RETRIEVE.
 
-请判断仅基于记忆生成的 draft_answer 是否足以直接回答用户问题。
+Please decide whether a draft_answer generated from memory alone is sufficient to directly answer the user's question.
 
-判定规则：
-- SUFFICIENT：记忆证据足够，可直接给出答案
-- NEED_RETRIEVE：记忆不足，必须进入外部检索
-- score 为 0~1，分数越高表示“仅凭记忆即可回答”的可信度越高
-- 建议 score>=0.70 时判为 SUFFICIENT，否则判为 NEED_RETRIEVE
+Judgment rules:
+- SUFFICIENT: The memory evidence is sufficient and the answer can be given directly
+- NEED_RETRIEVE: Insufficient memory, must enter external retrieval
+- The score is 0~1. The higher the score, the higher the credibility of “answering from memory alone”.
+- It is recommended that when score>=0.70, it will be judged as SUFFICIENT, otherwise it will be judged as NEED_RETRIEVE
 
-risk_level 只能是：
+risk_level can only be:
 - LOW
 - MEDIUM
 - HIGH
 
-必须只输出 JSON：
+Must only output JSON:
 {
   "score": 0.0,
   "verdict": "SUFFICIENT" | "NEED_RETRIEVE",
   "reason": "...",
   "risk_level": "LOW" | "MEDIUM" | "HIGH"
-}
-"""
+}"""
 
-    def build_user_prompt(self, state):
+    def build_user_prompt (self ,state ):
         return f"""
-用户问题:
+User question:
 {state.get("query", "")}
 
-记忆草答:
+Memory draft answer:
 {state.get("draft_answer", "")}
 
-草答置信度:
+Draft confidence:
 {state.get("draft_confidence", 0.0)}
 
-使用记忆片段数:
+Used memory chunks:
 {state.get("used_memory_chunks", 0)}
 """

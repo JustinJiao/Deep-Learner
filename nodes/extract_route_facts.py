@@ -235,7 +235,15 @@ def _extract_value_from_quote(quote: str) -> tuple[str, float | None]:
 
 
 def _route_records(state: AgentState) -> list[dict]:
-    routes = list(state.get("phase1_query_routes", []) or [])
+    context_source = str(state.get("context_source", "") or "").strip().lower()
+    phase1_routes = list(state.get("phase1_query_routes", []) or [])
+    phase2_routes = list(state.get("phase2_query_routes", []) or [])
+
+    routes: list[dict] = []
+    if context_source == "phase2":
+        routes = phase2_routes or phase1_routes
+    else:
+        routes = phase1_routes or phase2_routes
     if routes:
         return routes
     retrieval_queries = list(state.get("retrieval_queries", []) or [])

@@ -1,17 +1,16 @@
 # llm/prompts/intent.py
 
-from llm.prompts.base import PromptContract
+from llm .prompts .base import PromptContract 
 
 
-class IntentPrompt(PromptContract):
+class IntentPrompt (PromptContract ):
 
-    READS = ["query", "short_term_memory", "recent_messages"]
-    WRITES = ["intent"]
+    READS =["query","short_term_memory","recent_messages"]
+    WRITES =["intent"]
 
-    SYSTEM = """
-    判断用户问题属于哪种类型：
-    - chat（闲聊/简单回答）
-    - research（需要检索或推理）
+    SYSTEM ="""Determine what type of user problem it is:
+    - chat (small talk/simple answer)
+    - research (requires retrieval or reasoning)
 
     Language requirement:
     - Output must be English-only.
@@ -24,22 +23,21 @@ class IntentPrompt(PromptContract):
       3) MSFT 10-K.pdf
     - Finance/risk/business questions about these companies should be classified as research.
 
-    必须返回 JSON 格式：
+    Must return JSON format:
     {
         "intent": {
-            "type": "chat" 或 "research"
+            "type": "chat" or "research"
         }
-    }
-    """
+    }"""
 
-    def build_user_prompt(self, state):
+    def build_user_prompt (self ,state ):
         return f"""
-历史摘要:
+Historical summary:
 {state.get("short_term_memory","")}
 
-最近对话:
+Recent messages:
 {state.get("recent_messages",[])}
 
-用户问题:
+User question:
 {state.get("query","")}
 """
