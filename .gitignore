@@ -40,15 +40,20 @@ htmlcov/
 # ==========================================
 # 3. 数据与向量数据库
 # ==========================================
-data/
+# Ignore data by default, but keep curated 10-K corpus for reproducibility
+data/*
+!data/10k/
+data/10k/*
+!data/10k/*.pdf
 storage/
 milvus_data/
 *.db
 *.sqlite3
 *.log
 
-# 不要上传 PDF/大文件
+# 不要上传 PDF/大文件（except curated 10-K files above）
 *.pdf
+!data/10k/*.pdf
 
 # ==========================================
 # 4. HuggingFace / 模型缓存

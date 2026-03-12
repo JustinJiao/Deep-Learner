@@ -1,68 +1,99 @@
 # Deep-Learner
 
-Deep-Learner is an Agentic RAG system for evidence-grounded QA over a constrained document corpus.
-It is designed to answer complex, multi-step questions with retrieval, reranking, verification, and
-repair/degrade controls.
+Deep-Learner is an Agentic RAG system for evidence-grounded QA over a constrained filing corpus.
 
-## Core Capabilities
+## What Is Included
 
-- Agentic workflow with explicit runtime stages (`MEMORY -> PHASE1 -> PHASE2 -> REPAIR/DEGRADE -> FINALIZE`)
-- Hybrid retrieval (vector + keyword) with RRF fusion
-- Multi-query routing for decomposition-style retrieval
-- Rerank calibration with route-aware features
-- Strict verification with deterministic checks to reduce unsupported claims
-- Citation-first response generation with context-window control
-- Short-term memory (STM) and long-term memory (LTM) integration
+- Runtime pipeline with staged control flow: `MEMORY -> PHASE1 -> PHASE2 -> REPAIR/DEGRADE -> FINALIZE`
+- Hybrid retrieval: vector + keyword + RRF + rerank
+- Strict verification and degrade fallback
+- Streamlit frontend
+- Curated corpus committed in repo:
+  - `data/10k/Amazon 10K 2024.pdf`
+  - `data/10k/Alphabet 10K 2024.pdf`
+  - `data/10k/MSFT 10-K.pdf`
 
-## Architecture (High Level)
-
-- `core/`: executor, state machine, node registry, contracts
-- `nodes/`: runtime nodes (rewrite, retrieve, rerank, compose, verify, degrade, memory)
-- `llm/`: model routing and prompt contracts
-- `tools/retrieve_tool/`: vector/keyword retrieval and rerank adapters
-- `ingestion/`: parsing, chunking, and dual-write indexing
-- `session/` + `memory/`: session context, STM/LTM storage and recall
-- `ui_streamlit.py`: interactive UI
-
-## Tech Stack
+## Prerequisites
 
 - Python 3.10+
-- LangChain model clients
-- Milvus (vector storage)
-- Elasticsearch (keyword/full-text retrieval)
-- Streamlit (UI)
+- Docker + Docker Compose
+- At least one LLM API key (OpenAI / Anthropic / Gemini / Ollama local)
 
-## Quick Start
+## Quick Start (Recommended)
 
 ### 1. Install dependencies
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -e .
 ```
 
 ### 2. Configure environment
 
-Create `.env` in the repository root. You can start from `.env.example`.
+```bash
+cp .env.example .env
+```
 
-### 3. Run the UI
+Then fill API keys in `.env` (for example `OPENAI_API_KEY=...`).
+
+Important:
+- Do not commit `.env` or real API keys to GitHub.
+- Keep `.env.example` as the shareable template.
+
+### 3. One-click rebuild of local databases (fast + pdfplumber)
+
+This starts Docker services and rebuilds Milvus + Elasticsearch indexes using:
+- `UNSTRUCTURED_STRATEGY=fast`
+- `PDF_EXTRACT_TABLES_WITH_PDFPLUMBER=true`
+- `UNSTRUCTURED_INFER_TABLE_STRUCTURE=false`
+
+```bash
+./scripts/one_click_rebuild_10k.sh
+```
+
+### 4. Run frontend
 
 ```bash
 streamlit run ui_streamlit.py
 ```
 
-### 4. Optional CLI mode
+## Manual Commands (If Needed)
+
+Start infrastructure:
 
 ```bash
-python -m scripts.main
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-## Notes
+Rebuild indexes only:
 
-- This project is configured for a closed filing corpus in the current setup.
-- Model routing and retrieval parameters are controlled through environment variables.
-- For reproducibility, keep the same `.env` and index state across runs.
+```bash
+UNSTRUCTURED_STRATEGY=fast \
+UNSTRUCTURED_INFER_TABLE_STRUCTURE=false \
+PDF_EXTRACT_TABLES_WITH_PDFPLUMBER=true \
+DOCS_PATH=data/10k \
+INGEST_RESET_TARGET=true \
+python -m scripts.rebuild_databases
+```
+
+Reset databases:
+
+```bash
+python -m scripts.reset_databases
+```
+
+## Health Checks
+
+- Elasticsearch: `http://localhost:9200`
+- Milvus port: `localhost:19530`
+
+## Reproducibility Notes
+
+- Vector/keyword databases are local runtime state and are not shared automatically across users.
+- With this repo, users can reproduce the same index locally from `data/10k` via the one-click script.
+- Keep `.env` settings and rebuild strategy consistent for comparable behavior.
 
 ## Author
 
 group9
-
