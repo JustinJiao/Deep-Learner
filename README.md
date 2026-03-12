@@ -19,17 +19,9 @@ Deep-Learner is an Agentic RAG system for evidence-grounded QA over a constraine
 - Docker + Docker Compose
 - At least one LLM API key (OpenAI / Anthropic / Gemini / Ollama local)
 
-## Quick Start (Recommended)
+## Quick Start (Recommended, One Command)
 
-### 1. Install dependencies
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-### 2. Configure environment
+### 1. Configure environment
 
 ```bash
 cp .env.example .env
@@ -41,22 +33,23 @@ Important:
 - Do not commit `.env` or real API keys to GitHub.
 - Keep `.env.example` as the shareable template.
 
-### 3. One-click rebuild of local databases (fast + pdfplumber)
+### 2. One-command bootstrap (install + docker + rebuild + frontend)
 
-This starts Docker services and rebuilds Milvus + Elasticsearch indexes using:
+This command will:
+- create `.venv` if needed
+- install dependencies
+- start Docker services
+- rebuild Milvus + Elasticsearch indexes using the 10-K corpus
+- launch Streamlit frontend
+
+```bash
+./scripts/bootstrap_and_run.sh
+```
+
+The rebuild strategy is fixed to:
 - `UNSTRUCTURED_STRATEGY=fast`
 - `PDF_EXTRACT_TABLES_WITH_PDFPLUMBER=true`
 - `UNSTRUCTURED_INFER_TABLE_STRUCTURE=false`
-
-```bash
-./scripts/one_click_rebuild_10k.sh
-```
-
-### 4. Run frontend
-
-```bash
-streamlit run ui_streamlit.py
-```
 
 ## Manual Commands (If Needed)
 
