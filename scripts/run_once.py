@@ -1,14 +1,8 @@
 # scripts/run_once.py
 
-import json 
-from core .debug_executor import DebugAgentExecutor 
+from core .debug_executor import DebugAgentExecutor ,pretty 
 from session .store import get_session 
 from memory .ltm import LTM 
-
-
-def pretty (obj ):
-    print (json .dumps (obj ,indent =2 ,ensure_ascii =False ,default =str ))
-
 
     # -------------------------
     # STM printing

@@ -8,14 +8,6 @@ class PromptContractError (ValueError ):
     """Prompt violates READ / WRITE constraints"""
 
 
-class InvalidPlanError (AgentError ):
-    """Plan structure is illegal/Graph transfer is illegal"""
-
-
-class MaxLoopExceededError (AgentError ):
-    """Exceeded maximum number of repairs"""
-
-
 class UnknownNodeError (AgentError ):
     """Unregistered nodes appear in Plan"""
 

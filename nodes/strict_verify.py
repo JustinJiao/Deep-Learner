@@ -44,14 +44,6 @@ _COMPANY_ALIAS_MAP :dict [str ,str ]={
 "google":"Alphabet",
 }
 
-_MULTI_COMPANY_MARKERS =(
-"all three companies",
-"all three",
-"all companies",
-"these companies",
-"three companies",
-)
-
 _COMPANY_ALIASES :dict [str ,tuple [str ,...]]={
 "Amazon":("amazon","aws"),
 "Microsoft":("microsoft","msft"),
@@ -323,45 +315,6 @@ def _value_close (a :float ,b :float )->bool :
     return abs (a -b )/scale <=0.02 
 
 
-def _detect_numeric_year_value_mismatch (
-query :str ,
-resolved_query :str ,
-response :str ,
-evidence_table :list [dict ],
-)->list [str ]:
-    year =_target_year (query =query ,resolved_query =resolved_query )
-    if year is None :
-        return []
-
-    expected_by_company =_extract_evidence_expected_values_million (
-    evidence_table =evidence_table ,
-    target_year =year ,
-    )
-    if not expected_by_company :
-        return []
-
-    response_by_company =_extract_response_company_values_million (response =response )
-    mismatches :list [str ]=[]
-    for company ,expected_values in expected_by_company .items ():
-        actual_values =response_by_company .get (company ,[])
-        if not actual_values :
-            continue 
-        matched =any (
-        _value_close (actual ,expected )
-        for actual in actual_values 
-        for expected in expected_values 
-        )
-        if matched :
-            continue 
-        expected_preview =", ".join (f"{v:.3f}"for v in expected_values [:3 ])
-        actual_preview =", ".join (f"{v:.3f}"for v in actual_values [:3 ])
-        mismatches .append (
-        f"{company}@{year} expected_million=[{expected_preview}] "
-        f"but_response=[{actual_preview}]"
-        )
-    return mismatches 
-
-
 def _numeric_alignment_summary (
 query :str ,
 resolved_query :str ,
@@ -610,61 +563,6 @@ def _companies_from_text (text :str )->set [str ]:
     return found 
 
 
-def _is_generic_multi_company_query (query :str )->bool :
-    lowered =str (query or "").lower ()
-    return any (marker in lowered for marker in _MULTI_COMPANY_MARKERS )
-
-
-def _required_companies_for_query (query :str ,context_pool :list [dict ])->set [str ]:
-    project_default ={"Amazon","Alphabet","Microsoft"}
-    query_companies =_companies_from_text (query )
-    if len (query_companies )>=2 :
-        return query_companies 
-    if not _is_generic_multi_company_query (query ):
-        return set ()
-
-    inferred :set [str ]=set ()
-    for doc in context_pool :
-        metadata =doc .get ("metadata",{})or {}
-        source_text =" ".join (
-        [
-        str (metadata .get ("source","")or ""),
-        str (doc .get ("source","")or ""),
-        str (doc .get ("title","")or ""),
-        str (doc .get ("id","")or ""),
-        ]
-        )
-        inferred .update (_companies_from_text (source_text ))
-    if len (inferred )>=2 :
-        return inferred 
-    return project_default 
-
-
-def _companies_from_citations (citations :list [dict ])->set [str ]:
-    found :set [str ]=set ()
-    for c in citations :
-        text =" ".join (
-        [
-        str (c .get ("id","")or ""),
-        str (c .get ("title","")or ""),
-        ]
-        )
-        found .update (_companies_from_text (text ))
-    return found 
-
-
-def _missing_company_coverage (
-query :str ,
-context_pool :list [dict ],
-citations :list [dict ],
-)->set [str ]:
-    required =_required_companies_for_query (query ,context_pool )
-    if len (required )<2 :
-        return set ()
-    cited =_companies_from_citations (citations )
-    return required -cited 
-
-
 def _missing_citation_ids (
 citations :list [dict ],
 context_pool :list [dict ],
@@ -754,7 +652,6 @@ def strict_verify_node (state :AgentState )->AgentState :
 
     total_score =_weighted_total_score (metrics )
     missing_entities =_extract_missing_entities (str (state .get ("response","")))
-    missing_company_coverage :set [str ]=set ()
     if missing_entities :
         strict_action ="REPAIR"
         repair_trigger ="insufficient_evidence_missing_company"
@@ -813,7 +710,7 @@ def strict_verify_node (state :AgentState )->AgentState :
         "numeric_expected_but_missing_in_response="+", ".join (missing_numeric_companies [:6 ])
         )
 
-    if failure_type =="CITATION_MISMATCH"and (missing_entities or missing_company_coverage ):
+    if failure_type =="CITATION_MISMATCH"and missing_entities :
         failure_type ="INSUFFICIENT_EVIDENCE"
         repair_trigger ="insufficient_evidence_missing_company"
 
@@ -829,8 +726,6 @@ def strict_verify_node (state :AgentState )->AgentState :
     )
     if missing_entities :
         reason +=f"; missing_entities={', '.join(sorted(missing_entities))}"
-    if missing_company_coverage :
-        reason +=f"; missing_company_coverage={', '.join(sorted(missing_company_coverage))}"
     if deterministic_notes :
         reason +=f"; deterministic={' | '.join(deterministic_notes)}"
 

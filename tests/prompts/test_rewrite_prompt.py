@@ -1,7 +1,6 @@
 from llm .prompts .rewrite import RewritePrompt 
 from ._helpers import (
 assert_validate_reads_ok ,
-assert_validate_reads_fail ,
 assert_build_prompt_ok ,
 )
 

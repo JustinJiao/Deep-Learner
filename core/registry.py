@@ -3,14 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass ,field 
 from typing import Any ,Callable 
 
-from nodes .intent import intent_node 
-from nodes .planner import planner_node 
-from nodes .recall_ltm import recall_ltm_node 
-from nodes .query_rewrite import query_rewrite_node 
-from nodes .retrieve import retrieve_node 
-from nodes .compose import compose_node 
-from nodes .verify import verify_node 
-from nodes .repair import repair_node 
 from nodes .persist_ltm import persist_ltm_node 
 from nodes .finalize import finalize_node 
 from nodes .stm_read import stm_read_node 
@@ -44,14 +36,6 @@ class NodeContract :
 
 NODE_REGISTRY :dict [str ,Callable [...,Any ]]={
 "stm_read":stm_read_node ,
-"intent":intent_node ,
-"planner":planner_node ,
-"recall_ltm":recall_ltm_node ,
-"query_rewrite":query_rewrite_node ,
-"retrieve":retrieve_node ,
-"compose":compose_node ,
-"verify":verify_node ,
-"repair":repair_node ,
 "finalize":finalize_node ,
 "stm_write":stm_write_node ,
 "stm_summary":stm_summary_node ,
@@ -79,59 +63,6 @@ NODE_CONTRACTS :dict [str ,NodeContract ]={
 name ="stm_read",
 reads ={"session_id"},
 writes ={"short_term_memory","recent_messages","_stm_to_compress","steps_log"},
-),
-"intent":NodeContract (
-name ="intent",
-reads ={"query","short_term_memory","recent_messages"},
-writes ={"intent","steps_log"},
-llm_node =True ,
-),
-"planner":NodeContract (
-name ="planner",
-reads ={"query","intent"},
-writes ={
-"plan",
-"is_direct_path",
-"loop_count",
-"repair_hint",
-"rewritten_query",
-"context_pool",
-"long_term_memory",
-"steps_log",
-},
-),
-"recall_ltm":NodeContract (
-name ="recall_ltm",
-reads ={"query"},
-writes ={"long_term_memory","steps_log"},
-),
-"query_rewrite":NodeContract (
-name ="query_rewrite",
-reads ={"query","long_term_memory"},
-writes ={"rewritten_query","steps_log"},
-llm_node =True ,
-),
-"retrieve":NodeContract (
-name ="retrieve",
-reads ={"query","rewritten_query"},
-writes ={"context_pool","steps_log"},
-),
-"compose":NodeContract (
-name ="compose",
-reads ={"query","context_pool","short_term_memory","long_term_memory","recent_messages","repair_hint"},
-writes ={"response","citations","steps_log"},
-llm_node =True ,
-),
-"verify":NodeContract (
-name ="verify",
-reads ={"response","context_pool"},
-writes ={"is_hallucination","verify_score","critique","repair_hint","steps_log"},
-llm_node =True ,
-),
-"repair":NodeContract (
-name ="repair",
-reads ={"critique","plan"},
-writes ={"repair_hint","context_pool","steps_log"},
 ),
 "finalize":NodeContract (
 name ="finalize",

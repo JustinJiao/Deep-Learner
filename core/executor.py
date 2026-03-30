@@ -1,7 +1,6 @@
 from __future__ import annotations 
 
 import copy 
-from typing import Any 
 
 from config .settings import AppConfig 
 from core .errors import (
@@ -102,9 +101,9 @@ class AgentExecutor :
 
     def run (self ,session_id :str ,query :str )->AgentState :
         state =build_initial_state (session_id =session_id ,query =query )
-        if AppConfig .RUNTIME_V2_ENABLED :
-            return self ._run_v2_state_machine (state )
-        return self ._run_legacy_flow (state )
+        if not AppConfig .RUNTIME_V2_ENABLED :
+            raise RuntimeError ("Legacy runtime flow has been removed; set RUNTIME_V2_ENABLED=true")
+        return self ._run_v2_state_machine (state )
 
     def _execute_node (self ,state :AgentState ,node_name :str )->AgentState :
         node_fn =NODE_REGISTRY .get (node_name )
@@ -130,60 +129,20 @@ class AgentExecutor :
 
         return out 
 
-    def _run_legacy_flow (self ,state :AgentState )->AgentState :
-        try :
-            state =self ._execute_node (state ,"stm_read")
-            state =self ._execute_node (state ,"intent")
-            state =self ._execute_node (state ,"planner")
-
-            plan =state ["plan"]
-
-            while not plan .is_finished ():
-                step =plan .current_step ()
-                state =self ._execute_node (state ,step )
-
-                if step =="verify"and state .get ("is_hallucination",False ):
-                    state ["loop_count"]=state .get ("loop_count",0 )+1 
-                    _append_log (
-                    state ,
-                    StepLog (node ="executor",info =f"verify_fail loop={state['loop_count']}"),
-                    )
-
-                    if state ["loop_count"]>plan .max_loops :
-                        state ["run_status"]="degraded"
-                        state ["response"]=(
-                        "My answer just now lacks reliable basis and cannot be self-verified within the scope of the current data."
-                        "To avoid misleading, please add: What specific documents/data do you want me to base this on, or provide more context."
-                        "(I could also give an uncertain but possible direction first and clearly label the hypothesis.)"
-                        )
-                        state ["is_hallucination"]=False 
-                        _append_log (
-                        state ,
-                        StepLog (node ="executor",info ="max_loops reached -> degraded response"),
-                        )
-                        plan .finish ()
-                        break 
-
-                    state =self ._execute_node (state ,"repair")
-                    continue 
-
-                plan .advance ()
-
-            if state .get ("run_status")=="running":
-                state ["run_status"]="ok"
-
-        except Exception as e :
-            state ["run_status"]="error"
-            state ["error"]={"type":type (e ).__name__ ,"message":str (e )}
-            _append_log (state ,StepLog (node ="executor",info =f"exception: {type(e).__name__}: {e}"))
-
-            if not state .get ("response"):
-                state ["response"]="The system encountered an error during processing and I cannot complete this answer. Please try again or provide more information."
-
-        finally :
-            state =self ._run_tail_nodes (state )
-
-        return state 
+    def _compose_and_strict_verify (
+        self ,
+        state :AgentState ,
+        *,
+        reset_repair_defaults :bool =False ,
+    )->tuple [AgentState ,str ]:
+        if reset_repair_defaults :
+            state .setdefault ("repair_mode",False )
+            state .setdefault ("strict_reason","")
+        state .setdefault ("previous_response",state .get ("response",""))
+        state =self ._execute_node (state ,"compose_with_context")
+        state =self ._execute_node (state ,"strict_verify")
+        strict_action =str (state .get ("strict_action","PASS")).upper ()
+        return state ,strict_action 
 
     def _run_v2_state_machine (self ,state :AgentState )->AgentState :
         try :
@@ -214,13 +173,10 @@ class AgentExecutor :
                 state =self ._execute_node (state ,"retrieve_phase1")
                 state =self ._execute_node (state ,"rerank_phase1")
                 state =self ._execute_node (state ,"extract_route_facts")
-                state .setdefault ("repair_mode",False )
-                state .setdefault ("strict_reason","")
-                state .setdefault ("previous_response",state .get ("response",""))
-                state =self ._execute_node (state ,"compose_with_context")
-                state =self ._execute_node (state ,"strict_verify")
-
-                strict_action =str (state .get ("strict_action","PASS")).upper ()
+                state ,strict_action =self ._compose_and_strict_verify (
+                state ,
+                reset_repair_defaults =True ,
+                )
                 if strict_action =="PASS":
                     state ["run_status"]="ok"
                     state ["strict_status"]="PASS"
@@ -241,12 +197,10 @@ class AgentExecutor :
                         state =self ._execute_node (state ,"retrieve_phase2")
                         state =self ._execute_node (state ,"rerank_phase2")
                         state =self ._execute_node (state ,"extract_route_facts")
-                        state .setdefault ("repair_mode",False )
-                        state .setdefault ("strict_reason","")
-                        state .setdefault ("previous_response",state .get ("response",""))
-                        state =self ._execute_node (state ,"compose_with_context")
-                        state =self ._execute_node (state ,"strict_verify")
-                        strict_action =str (state .get ("strict_action","PASS")).upper ()
+                        state ,strict_action =self ._compose_and_strict_verify (
+                        state ,
+                        reset_repair_defaults =True ,
+                        )
                         failure_type =state .get ("failure_type","")
 
                         if strict_action =="PASS":
@@ -278,10 +232,7 @@ class AgentExecutor :
                             )
                             state =self ._execute_node (state ,"set_repair_mode")
                             state =self ._execute_node (state ,"extract_route_facts")
-                            state .setdefault ("previous_response",state .get ("response",""))
-                            state =self ._execute_node (state ,"compose_with_context")
-                            state =self ._execute_node (state ,"strict_verify")
-                            strict_action =str (state .get ("strict_action","PASS")).upper ()
+                            state ,strict_action =self ._compose_and_strict_verify (state )
 
                             if strict_action =="PASS":
                                 state ["run_status"]="ok"
